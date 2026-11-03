@@ -44,6 +44,27 @@ class SecureStore(private val context: Context) {
         get() = prefs.getString("user_name", "") ?: ""
         set(v) = prefs.edit { putString("user_name", v) }
 
+    var routePref: String
+        get() = prefs.getString("route_pref", "AUTO") ?: "AUTO"
+        set(v) = prefs.edit { putString("route_pref", v) }
+
+    var gain: Float
+        get() = prefs.getFloat("gain", 1.6f)
+        set(v) = prefs.edit { putFloat("gain", v) }
+
+    var vad: String
+        get() = prefs.getString("vad", "NORMAL") ?: "NORMAL"
+        set(v) = prefs.edit { putString("vad", v) }
+
+    var style: String
+        get() = prefs.getString("style", "DOST") ?: "DOST"
+        set(v) = prefs.edit { putString("style", v) }
+
+    /** "", "MALE" or "FEMALE" (empty = not told yet). */
+    var userGender: String
+        get() = prefs.getString("user_gender", "") ?: ""
+        set(v) = prefs.edit { putString("user_gender", v) }
+
     companion object {
         private const val FILE = "zenro_secure"
     }

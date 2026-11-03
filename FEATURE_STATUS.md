@@ -27,6 +27,28 @@ GitHub Actions run and phone test.
 | Provider interface for other voice providers | IMPLEMENTED (only Gemini Live exists) |
 | Hindi/Hinglish quality | UNKNOWN until tested on device |
 
+## Voice v0.2 (this update)
+
+None of the items below were compiled or run: no Kotlin compiler and no network were available when this was written.
+The first GitHub Actions run is the first compile of ALL Android code. Unit tests were WRITTEN (VoiceV2Test, 11 tests) but NOT RUN.
+
+| Feature | Status |
+|---|---|
+| Output routing: Auto / Headphones / Speaker / Ear (`AudioRouter`) | IMPLEMENTED, not compiled, not device verified |
+| Headphone HQ mode (media stream to Bluetooth/wired + phone mic, so BT does not drop to call quality) | IMPLEMENTED, not device verified |
+| Re-route when headphones are plugged/unplugged mid-session | IMPLEMENTED, not device verified |
+| Volume boost 1.0-3.0x with soft limiter + slider; speaker mode also raises call volume and restores it | IMPLEMENTED, gain logic has tests written (not run) |
+| Real output shown under the orb (taken from `AudioTrack.routedDevice` after first audio) | IMPLEMENTED, not device verified |
+| BLUETOOTH_CONNECT permission requested at runtime | IMPLEMENTED |
+| Hindi pronunciation prompt, user gender (Ladka/Ladki), styles Dost / Pyaari dost / Focus / Padhai | IMPLEMENTED, prompt tests written (not run); how it sounds is NOT verified |
+| Reply speed presets Jaldi / Normal / Aaram se (VAD silence 500 / 700 / 1100 ms) | IMPLEMENTED, JSON test written; field names from Google docs, not checked on a live server |
+| Key test button (header-auth call to models list; proves the key, not Live access) | IMPLEMENTED, not device verified |
+| Hinglish error messages | IMPLEMENTED, tests written (not run) |
+
+Not in this update (planned): Headset call mode fallback, audio-focus handling (phone calls), Diagnostics screen,
+text chat tab, notification Stop action, voice preview button, camera Scan, memory.
+No 18+ / romantic-explicit mode will be built; "Pyaari dost" is warm friendship only.
+
 ## Not started (Phases 2-9)
 
 Sarvam voices, camera/vision, persistent memory, phone control, communication, wake word, background reliability,

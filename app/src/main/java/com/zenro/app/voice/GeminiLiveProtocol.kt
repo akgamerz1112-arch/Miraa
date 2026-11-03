@@ -4,6 +4,13 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.Base64
 
+/** How long the server waits in silence before it decides you finished speaking (Google suggests 500-800 ms). */
+enum class VadPreset(val silenceMs: Int, val prefixMs: Int) {
+    QUICK(500, 20),
+    NORMAL(700, 20),
+    SLOW(1100, 40),
+}
+
 /** Events decoded from a Gemini Live server message. */
 sealed interface ServerEvent {
     object SetupComplete : ServerEvent
@@ -40,6 +47,7 @@ object GeminiLiveProtocol {
         voiceName: String,
         systemPrompt: String,
         resumeHandle: String? = null,
+        vad: VadPreset? = null,
     ): String {
         val fullModel = if (model.startsWith("models/")) model else "models/$model"
         val voice = JSONObject().put(
@@ -65,6 +73,17 @@ object GeminiLiveProtocol {
                 "sessionResumption",
                 JSONObject().also { if (!resumeHandle.isNullOrEmpty()) it.put("handle", resumeHandle) }
             )
+        if (vad != null) {
+            setup.put(
+                "realtimeInputConfig",
+                JSONObject().put(
+                    "automaticActivityDetection",
+                    JSONObject()
+                        .put("prefixPaddingMs", vad.prefixMs)
+                        .put("silenceDurationMs", vad.silenceMs)
+                )
+            )
+        }
         return JSONObject().put("setup", setup).toString()
     }
 

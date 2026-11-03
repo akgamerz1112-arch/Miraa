@@ -1,4 +1,4 @@
-# ZENRO (Phase 1: live voice companion)
+# ZENRO (Voice v0.2: live voice companion)
 
 Native Android (Kotlin + Jetpack Compose). Talk to ZENRO in real time using Gemini Live, in Hindi, Hinglish or English.
 New independent project. Right now it TALKS only; phone control, camera, memory etc. are later phases (see FEATURE_STATUS.md).

@@ -1,5 +1,8 @@
 package com.zenro.app.voice
 
+import com.zenro.app.audio.AudioLogic
+import com.zenro.app.audio.RoutePref
+
 enum class SessionState { IDLE, CONNECTING, LISTENING, SPEAKING, RECONNECTING, ERROR }
 
 enum class Role { USER, ASSISTANT }
@@ -31,6 +34,9 @@ data class VoiceConfig(
     val systemPrompt: String,
     /** Called when a reconnect cannot resume the old session, to rebuild context from the transcript. */
     val promptForNewSession: () -> String = { systemPrompt },
+    val routePref: RoutePref = RoutePref.AUTO,
+    val gain: Float = AudioLogic.DEFAULT_GAIN,
+    val vad: VadPreset = VadPreset.NORMAL,
 )
 
 interface VoiceCallbacks {
@@ -39,6 +45,8 @@ interface VoiceCallbacks {
     fun onTurnComplete()
     fun onLevel(level: Float)
     fun onError(message: String)
+    /** Human-readable active output, e.g. "Awaaz: Bluetooth Buds (HQ)". */
+    fun onRoute(label: String) {}
 }
 
 /** Common interface so other real-time voice providers can be added later. */
@@ -46,4 +54,6 @@ interface VoiceProvider {
     fun start(config: VoiceConfig, callbacks: VoiceCallbacks)
     fun stop()
     fun setMuted(muted: Boolean)
+    fun setGain(gain: Float) {}
+    fun setRoutePref(pref: RoutePref) {}
 }

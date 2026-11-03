@@ -1,6 +1,7 @@
 package com.zenro.app.audio
 
 import android.annotation.SuppressLint
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -19,14 +20,19 @@ class MicStreamer {
     val isRunning: Boolean get() = running
 
     @SuppressLint("MissingPermission") // RECORD_AUDIO is requested by the UI before a session starts.
-    fun start(onChunk: (ByteArray, Int) -> Unit, onLevel: (Float) -> Unit) {
+    fun start(
+        onChunk: (ByteArray, Int) -> Unit,
+        onLevel: (Float) -> Unit,
+        source: Int = MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+        preferred: AudioDeviceInfo? = null,
+    ) {
         if (running) return
         val rate = 16000
         val min = AudioRecord.getMinBufferSize(
             rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT
         )
         val rec = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            source,
             rate,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
@@ -36,6 +42,7 @@ class MicStreamer {
             rec.release()
             throw IllegalStateException("Microphone could not be opened")
         }
+        if (preferred != null) rec.setPreferredDevice(preferred)
         if (AcousticEchoCanceler.isAvailable()) {
             aec = AcousticEchoCanceler.create(rec.audioSessionId)?.also { it.enabled = true }
         }

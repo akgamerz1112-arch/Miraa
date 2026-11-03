@@ -1,12 +1,13 @@
 package com.zenro.app.voice
 
 import android.content.Context
-import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
+import com.zenro.app.audio.AudioRouter
 import com.zenro.app.audio.MicStreamer
 import com.zenro.app.audio.Pcm
 import com.zenro.app.audio.PcmPlayer
+import com.zenro.app.audio.RoutePref
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -28,7 +29,7 @@ import kotlin.math.min
  */
 class GeminiLiveProvider(context: Context) : VoiceProvider {
     private val appContext = context.applicationContext
-    private val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private val router = AudioRouter(appContext)
     private val client = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .pingInterval(20, TimeUnit.SECONDS)
@@ -44,9 +45,8 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
     @Volatile private var ws: WebSocket? = null
     @Volatile private var resumeHandle: String? = null
     private var attempts = 0
-    private var prevMode = AudioManager.MODE_NORMAL
-    private var prevSpeaker = false
-    private var audioRouted = false
+    @Volatile private var route: AudioRouter.Applied? = null
+    @Volatile private var routeChecked = false
     private lateinit var config: VoiceConfig
     private lateinit var cb: VoiceCallbacks
 
@@ -56,8 +56,9 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         stopped = false
         attempts = 0
         resumeHandle = null
-        routeAudio()
-        player.start()
+        player.gain = config.gain
+        applyRoute()
+        router.listen(handler) { scheduleRerouteCheck() }
         connect()
     }
 
@@ -71,21 +72,41 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         cleanup()
     }
 
-    @Suppress("DEPRECATION")
-    private fun routeAudio() {
-        prevMode = audioManager.mode
-        prevSpeaker = audioManager.isSpeakerphoneOn
-        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-        audioManager.isSpeakerphoneOn = true
-        audioRouted = true
+    override fun setGain(gain: Float) {
+        player.gain = gain
     }
 
-    @Suppress("DEPRECATION")
-    private fun restoreAudio() {
-        if (!audioRouted) return
-        audioManager.isSpeakerphoneOn = prevSpeaker
-        audioManager.mode = prevMode
-        audioRouted = false
+    override fun setRoutePref(pref: RoutePref) {
+        if (!this::config.isInitialized) return
+        config = config.copy(routePref = pref)
+        if (!stopped) handler.post { if (!stopped) applyRoute() }
+    }
+
+    /** Applies the chosen output/mic and restarts playback (and mic) on it. Session stays connected. */
+    private fun applyRoute() {
+        val r = router.apply(config.routePref)
+        route = r
+        routeChecked = false
+        player.stop()
+        player.start(r.usage, r.output)
+        if (mic.isRunning) {
+            mic.stop()
+            startMicIfNeeded()
+        }
+        cb.onRoute(r.label)
+    }
+
+    private val rerouteTask = Runnable {
+        if (stopped) return@Runnable
+        val p = router.plan(config.routePref)
+        val cur = route
+        if (cur == null || p.mode != cur.mode || p.output?.id != cur.output?.id) applyRoute()
+    }
+
+    private fun scheduleRerouteCheck() {
+        if (stopped) return
+        handler.removeCallbacks(rerouteTask)
+        handler.postDelayed(rerouteTask, 500)
     }
 
     private fun connect() {
@@ -103,7 +124,9 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         ws = null
         mic.stop()
         player.stop()
-        restoreAudio()
+        router.unlisten()
+        router.restore()
+        route = null
     }
 
     private fun fail(message: String) {
@@ -141,10 +164,12 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
                 },
                 onLevel = { lvl ->
                     if (!speaking) cb.onLevel(if (muted.get()) 0f else lvl)
-                }
+                },
+                source = route?.micSource ?: android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+                preferred = route?.micDevice
             )
         } catch (e: Exception) {
-            fail("Mic start failed: ${e.message}")
+            fail(Errors.mic())
         }
     }
 
@@ -159,6 +184,10 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
                 }
                 is ServerEvent.Audio -> {
                     speaking = true
+                    if (!routeChecked) {
+                        routeChecked = true
+                        player.routedDevice()?.let { cb.onRoute("Awaaz: " + AudioRouter.describe(it)) }
+                    }
                     player.enqueue(e.pcm)
                     cb.onLevel(Pcm.level(e.pcm, e.pcm.size))
                     cb.onState(SessionState.SPEAKING)
@@ -177,7 +206,7 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
                 is ServerEvent.OutputText -> cb.onTranscript(Role.ASSISTANT, e.text)
                 is ServerEvent.GoAway -> { /* server will close soon; reconnect happens on drop */ }
                 is ServerEvent.ResumptionHandle -> resumeHandle = e.handle
-                is ServerEvent.Error -> fail("Server error: ${e.message}")
+                is ServerEvent.Error -> fail(Errors.closed(0, e.message ?: ""))
             }
         }
     }
@@ -187,7 +216,7 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
             val handle = resumeHandle
             val prompt = if (handle == null && attempts > 0) config.promptForNewSession() else config.systemPrompt
             webSocket.send(
-                GeminiLiveProtocol.buildSetup(config.model, config.voiceName, prompt, handle)
+                GeminiLiveProtocol.buildSetup(config.model, config.voiceName, prompt, handle, config.vad)
             )
         }
 
@@ -205,12 +234,12 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             if (webSocket !== ws) return
-            handleDrop("Connection closed ($code) $reason", null, code)
+            handleDrop(Errors.closed(code, reason), null, code)
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             if (webSocket !== ws) return
-            handleDrop("Network error: ${t.message ?: t.javaClass.simpleName}", response?.code, null)
+            handleDrop(if (response != null) Errors.http(response.code) else Errors.network(), response?.code, null)
         }
     }
 

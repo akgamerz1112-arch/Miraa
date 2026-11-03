@@ -1,6 +1,7 @@
 package com.zenro.app.audio
 
 import android.media.AudioAttributes
+import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioTrack
 import java.util.concurrent.LinkedBlockingQueue
@@ -12,6 +13,7 @@ import kotlin.math.min
 /**
  * Low-latency streaming playback of 24 kHz mono PCM16.
  * flush() drops everything queued so barge-in stops speech immediately.
+ * [gain] is a software volume boost (1.0 - 3.0) with a soft limiter.
  */
 class PcmPlayer(private val sampleRate: Int = 24000) {
     private class Chunk(val gen: Int, val data: ByteArray)
@@ -19,10 +21,14 @@ class PcmPlayer(private val sampleRate: Int = 24000) {
     private val queue = LinkedBlockingQueue<Chunk>()
     private val generation = AtomicInteger(0)
     @Volatile private var running = false
+    @Volatile var gain: Float = AudioLogic.DEFAULT_GAIN
     private var track: AudioTrack? = null
     private var thread: Thread? = null
 
-    fun start() {
+    fun start(
+        usage: Int = AudioAttributes.USAGE_VOICE_COMMUNICATION,
+        preferred: AudioDeviceInfo? = null,
+    ) {
         if (running) return
         val minBuf = AudioTrack.getMinBufferSize(
             sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_16BIT
@@ -30,7 +36,7 @@ class PcmPlayer(private val sampleRate: Int = 24000) {
         val t = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setUsage(usage)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
             )
@@ -44,6 +50,7 @@ class PcmPlayer(private val sampleRate: Int = 24000) {
             .setBufferSizeInBytes(max(minBuf, 4800) * 2)
             .setTransferMode(AudioTrack.MODE_STREAM)
             .build()
+        if (preferred != null) t.setPreferredDevice(preferred)
         t.play()
         track = t
         running = true
@@ -62,8 +69,11 @@ class PcmPlayer(private val sampleRate: Int = 24000) {
     }
 
     fun enqueue(pcm: ByteArray) {
-        if (running) queue.offer(Chunk(generation.get(), pcm))
+        if (running) queue.offer(Chunk(generation.get(), AudioLogic.applyGain(pcm, gain)))
     }
+
+    /** The device Android actually routes this track to (null until playing). */
+    fun routedDevice(): AudioDeviceInfo? = try { track?.routedDevice } catch (_: Exception) { null }
 
     /** Barge-in: discard queued and in-flight audio right now. */
     fun flush() {

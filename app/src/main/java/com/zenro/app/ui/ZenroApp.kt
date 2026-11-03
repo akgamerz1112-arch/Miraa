@@ -30,11 +30,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,10 +62,14 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.zenro.app.VoiceViewModel
+import com.zenro.app.audio.RoutePref
 import com.zenro.app.voice.Gender
 import com.zenro.app.voice.GeminiLiveProtocol
 import com.zenro.app.voice.Role
 import com.zenro.app.voice.SessionState
+import com.zenro.app.voice.Style
+import com.zenro.app.voice.UserGender
+import com.zenro.app.voice.VadPreset
 import com.zenro.app.voice.VoiceCatalog
 
 private val Bg = Color(0xFF05070A)
@@ -82,30 +88,31 @@ fun ZenroApp(vm: VoiceViewModel = viewModel()) {
     val muted by vm.muted.collectAsStateWithLifecycle()
     val voice by vm.voice.collectAsStateWithLifecycle()
     val hasKey by vm.hasKey.collectAsStateWithLifecycle()
-    val model by vm.model.collectAsStateWithLifecycle()
-    val userName by vm.userName.collectAsStateWithLifecycle()
+    val route by vm.route.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
     val ctx = LocalContext.current
 
+    fun granted(p: String) = ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED
+
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { res ->
-        if (res[Manifest.permission.RECORD_AUDIO] == true) vm.startSession()
+    ) { _ ->
+        // Bluetooth/notification permissions are optional; only the mic is required.
+        if (granted(Manifest.permission.RECORD_AUDIO)) vm.startSession()
         else vm.reportError("Microphone permission nahi mili. Bina mic ke voice chat nahi chalegi.")
     }
 
     fun onOrbTap() {
         if (state == SessionState.IDLE || state == SessionState.ERROR) {
-            val micOk = ContextCompat.checkSelfPermission(
-                ctx, Manifest.permission.RECORD_AUDIO
-            ) == PackageManager.PERMISSION_GRANTED
-            if (micOk) {
-                vm.startSession()
-            } else {
-                val perms = mutableListOf(Manifest.permission.RECORD_AUDIO)
-                if (Build.VERSION.SDK_INT >= 33) perms.add(Manifest.permission.POST_NOTIFICATIONS)
-                permLauncher.launch(perms.toTypedArray())
+            val missing = mutableListOf<String>()
+            if (!granted(Manifest.permission.RECORD_AUDIO)) missing.add(Manifest.permission.RECORD_AUDIO)
+            if (Build.VERSION.SDK_INT >= 31 && !granted(Manifest.permission.BLUETOOTH_CONNECT)) {
+                missing.add(Manifest.permission.BLUETOOTH_CONNECT)
             }
+            if (Build.VERSION.SDK_INT >= 33 && !granted(Manifest.permission.POST_NOTIFICATIONS)) {
+                missing.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            if (missing.isEmpty()) vm.startSession() else permLauncher.launch(missing.toTypedArray())
         } else {
             vm.stopSession()
         }
@@ -138,6 +145,7 @@ fun ZenroApp(vm: VoiceViewModel = viewModel()) {
                 Spacer(Modifier.height(4.dp))
                 Orb(state, level, ::onOrbTap, Modifier.size(240.dp))
                 Text(statusLabel(state, muted, hasKey), color = if (state == SessionState.ERROR) Red else Cyan, fontSize = 15.sp)
+                if (route.isNotBlank()) Text(route, color = Dim, fontSize = 12.sp)
                 error?.let {
                     Spacer(Modifier.height(6.dp))
                     Text(it, color = Red, fontSize = 13.sp, textAlign = TextAlign.Center)
@@ -179,15 +187,7 @@ fun ZenroApp(vm: VoiceViewModel = viewModel()) {
                 }
             }
         }
-        if (showSettings) {
-            SettingsDialog(
-                hasKey = hasKey,
-                model = model,
-                userName = userName,
-                onSave = { k, m, n -> vm.saveSettings(k, m, n); showSettings = false },
-                onDismiss = { showSettings = false }
-            )
-        }
+        if (showSettings) SettingsDialog(vm) { showSettings = false }
     }
 }
 
@@ -241,15 +241,26 @@ private fun Orb(state: SessionState, level: Float, onClick: () -> Unit, modifier
 }
 
 @Composable
-private fun SettingsDialog(hasKey: Boolean, model: String, userName: String, onSave: (String, String, String) -> Unit, onDismiss: () -> Unit) {
+private fun SettingsDialog(vm: VoiceViewModel, onDismiss: () -> Unit) {
+    val hasKey by vm.hasKey.collectAsStateWithLifecycle()
+    val routePref by vm.routePref.collectAsStateWithLifecycle()
+    val gain by vm.gain.collectAsStateWithLifecycle()
+    val vad by vm.vad.collectAsStateWithLifecycle()
+    val style by vm.style.collectAsStateWithLifecycle()
+    val userGender by vm.userGender.collectAsStateWithLifecycle()
+    val keyTest by vm.keyTest.collectAsStateWithLifecycle()
     var key by remember { mutableStateOf("") }
-    var m by remember { mutableStateOf(model) }
-    var name by remember { mutableStateOf(userName) }
+    var m by remember { mutableStateOf(vm.model.value) }
+    var name by remember { mutableStateOf(vm.userName.value) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Settings") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 Text(
                     if (hasKey) "API key saved (hidden). Naya daalo to replace ho jayegi."
                     else "Gemini API key abhi set nahi hai.",
@@ -260,10 +271,55 @@ private fun SettingsDialog(hasKey: Boolean, model: String, userName: String, onS
                     label = { Text("Gemini API key") }, singleLine = true,
                     visualTransformation = PasswordVisualTransformation()
                 )
+                OutlinedButton(onClick = { vm.testKey(key.trim()) }) { Text("Key test karo") }
+                if (keyTest.isNotBlank()) Text(keyTest, fontSize = 12.sp, color = Dim)
+
                 OutlinedTextField(
                     value = name, onValueChange = { name = it },
-                    label = { Text("Aapka naam (ZENRO isse bulayegi/bulayega)") }, singleLine = true
+                    label = { Text("Aapka naam") }, singleLine = true
                 )
+                Text("Aap ho", fontSize = 12.sp, color = Dim)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = userGender == UserGender.MALE, onClick = { vm.setUserGender(UserGender.MALE) }, label = { Text("Ladka") })
+                    FilterChip(selected = userGender == UserGender.FEMALE, onClick = { vm.setUserGender(UserGender.FEMALE) }, label = { Text("Ladki") })
+                }
+
+                Text("Awaaz kahan se aaye", fontSize = 12.sp, color = Dim)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        RoutePref.AUTO to "Auto", RoutePref.HEADPHONES to "Headphones",
+                        RoutePref.SPEAKER to "Speaker", RoutePref.EAR to "Ear"
+                    ).forEach { (p, label) ->
+                        FilterChip(selected = routePref == p, onClick = { vm.setRoutePref(p) }, label = { Text(label) })
+                    }
+                }
+                Text("Volume boost: ${"%.1f".format(gain)}x", fontSize = 12.sp, color = Dim)
+                Slider(
+                    value = gain, onValueChange = { vm.setGainLive(it) },
+                    onValueChangeFinished = { vm.saveGain() }, valueRange = 1f..3f
+                )
+                Text(
+                    "Headphones mein phone ke volume buttons (media) se awaaz badhao. Speaker mode mein call volume bhi badh jaati hai aur band hone pe wapas ho jaati hai.",
+                    fontSize = 11.sp, color = Dim
+                )
+
+                Text("Jawab kitni jaldi shuru ho", fontSize = 12.sp, color = Dim)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(VadPreset.QUICK to "Jaldi", VadPreset.NORMAL to "Normal", VadPreset.SLOW to "Aaram se").forEach { (v, label) ->
+                        FilterChip(selected = vad == v, onClick = { vm.setVad(v) }, label = { Text(label) })
+                    }
+                }
+
+                Text("Baat karne ka style", fontSize = 12.sp, color = Dim)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        Style.DOST to "Dost", Style.PYAARI to "Pyaari dost",
+                        Style.FOCUS to "Focus", Style.PADHAI to "Padhai"
+                    ).forEach { (st, label) ->
+                        FilterChip(selected = style == st, onClick = { vm.setStyle(st) }, label = { Text(label) })
+                    }
+                }
+
                 OutlinedTextField(
                     value = m, onValueChange = { m = it },
                     label = { Text("Live model name") }, singleLine = true
@@ -277,10 +333,12 @@ private fun SettingsDialog(hasKey: Boolean, model: String, userName: String, onS
                         FilterChip(selected = m == opt, onClick = { m = opt }, label = { Text(opt, fontSize = 11.sp) })
                     }
                 }
-                Text("Key is phone mein encrypted store hoti hai, kahin upload nahi hoti (sirf Google ko voice ke saath jaati hai).", fontSize = 12.sp, color = Dim)
+                Text("Key is phone mein encrypted store hoti hai, kahin upload nahi hoti (sirf Google ko voice ke saath jaati hai). Style/speed badalne pe session naya shuru hota hai.", fontSize = 12.sp, color = Dim)
             }
         },
-        confirmButton = { TextButton(onClick = { onSave(key.trim(), m.trim(), name.trim()) }) { Text("Save") } },
+        confirmButton = {
+            TextButton(onClick = { vm.saveSettings(key.trim(), m.trim(), name.trim()); onDismiss() }) { Text("Save") }
+        },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
