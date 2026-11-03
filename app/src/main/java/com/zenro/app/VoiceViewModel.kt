@@ -1,0 +1,162 @@
+package com.zenro.app
+
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import com.zenro.app.data.SecureStore
+import com.zenro.app.service.VoiceForegroundService
+import com.zenro.app.voice.GeminiLiveProvider
+import com.zenro.app.voice.Gender
+import com.zenro.app.voice.Persona
+import com.zenro.app.voice.Role
+import com.zenro.app.voice.SessionState
+import com.zenro.app.voice.VoiceCallbacks
+import com.zenro.app.voice.VoiceCatalog
+import com.zenro.app.voice.VoiceConfig
+import com.zenro.app.voice.VoiceOption
+import com.zenro.app.voice.VoiceProvider
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+
+data class ChatLine(val role: Role, val text: String)
+
+class VoiceViewModel(app: Application) : AndroidViewModel(app) {
+    private val store = SecureStore(app)
+    private var provider: VoiceProvider? = null
+    private var openRole: Role? = null
+
+    private val _state = MutableStateFlow(SessionState.IDLE)
+    val state: StateFlow<SessionState> = _state.asStateFlow()
+    private val _level = MutableStateFlow(0f)
+    val level: StateFlow<Float> = _level.asStateFlow()
+    private val _lines = MutableStateFlow<List<ChatLine>>(emptyList())
+    val lines: StateFlow<List<ChatLine>> = _lines.asStateFlow()
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _muted = MutableStateFlow(false)
+    val muted: StateFlow<Boolean> = _muted.asStateFlow()
+    private val _voice = MutableStateFlow(VoiceCatalog.byName(store.voice))
+    val voice: StateFlow<VoiceOption> = _voice.asStateFlow()
+    private val _hasKey = MutableStateFlow(store.apiKey.isNotBlank())
+    val hasKey: StateFlow<Boolean> = _hasKey.asStateFlow()
+    private val _userName = MutableStateFlow(store.userName)
+    val userName: StateFlow<String> = _userName.asStateFlow()
+    private val _model = MutableStateFlow(store.model)
+    val model: StateFlow<String> = _model.asStateFlow()
+
+    private val callbacks = object : VoiceCallbacks {
+        override fun onState(state: SessionState) {
+            if (provider != null) _state.value = state
+        }
+        override fun onTranscript(role: Role, text: String) = appendTranscript(role, text)
+        override fun onTurnComplete() { openRole = null }
+        override fun onLevel(level: Float) { _level.value = level }
+        override fun onError(message: String) {
+            provider = null
+            VoiceForegroundService.stop(getApplication())
+            _level.value = 0f
+            _error.value = message
+            _state.value = SessionState.ERROR
+        }
+    }
+
+    fun startSession() {
+        if (_state.value != SessionState.IDLE && _state.value != SessionState.ERROR) return
+        val key = store.apiKey
+        if (key.isBlank()) {
+            _error.value = "Pehle Settings mein Gemini API key daalo."
+            return
+        }
+        _error.value = null
+        VoiceForegroundService.start(getApplication())
+        val gender = _voice.value.gender
+        val name = store.userName
+        val p = GeminiLiveProvider(getApplication())
+        provider = p
+        _state.value = SessionState.CONNECTING
+        p.setMuted(_muted.value)
+        p.start(
+            VoiceConfig(
+                apiKey = key,
+                model = store.model,
+                voiceName = _voice.value.apiName,
+                systemPrompt = Persona.systemPrompt(gender, name, recap()),
+                promptForNewSession = { Persona.systemPrompt(gender, name, recap()) }
+            ),
+            callbacks
+        )
+    }
+
+    fun stopSession() {
+        provider?.stop()
+        provider = null
+        VoiceForegroundService.stop(getApplication())
+        _level.value = 0f
+        _state.value = SessionState.IDLE
+        openRole = null
+    }
+
+    fun toggleMute() {
+        val m = !_muted.value
+        _muted.value = m
+        provider?.setMuted(m)
+    }
+
+    fun setVoice(v: VoiceOption) {
+        store.voice = v.apiName
+        _voice.value = v
+        restartIfActive()
+    }
+
+    fun setGender(g: Gender) {
+        if (_voice.value.gender == g) return
+        setVoice(VoiceCatalog.forGender(g).first())
+    }
+
+    private fun recap(): String = Persona.recap(_lines.value.map { it.role to it.text })
+
+    fun saveSettings(newKey: String, newModel: String, newName: String) {
+        store.userName = newName
+        _userName.value = newName
+        if (newKey.isNotBlank()) {
+            store.apiKey = newKey
+            _hasKey.value = true
+        }
+        if (newModel.isNotBlank()) {
+            store.model = newModel
+            _model.value = newModel
+        }
+        _error.value = null
+    }
+
+    fun reportError(message: String) { _error.value = message }
+
+    // Voice is fixed when a Gemini session is created, so a change needs a fresh session.
+    private fun restartIfActive() {
+        val s = _state.value
+        if (s != SessionState.IDLE && s != SessionState.ERROR) {
+            stopSession()
+            startSession()
+        }
+    }
+
+    @Synchronized
+    private fun appendTranscript(role: Role, text: String) {
+        _lines.update { cur ->
+            val next = if (openRole == role && cur.isNotEmpty() && cur.last().role == role) {
+                cur.dropLast(1) + ChatLine(role, cur.last().text + text)
+            } else {
+                cur + ChatLine(role, text.trimStart())
+            }
+            if (next.size > 200) next.takeLast(200) else next
+        }
+        openRole = role
+    }
+
+    override fun onCleared() {
+        provider?.stop()
+        provider = null
+        VoiceForegroundService.stop(getApplication())
+    }
+}

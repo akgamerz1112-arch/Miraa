@@ -1,0 +1,70 @@
+name: Android Debug APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Android SDK (platform 34) is preinstalled on ubuntu-latest runners.
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Optional: keep the SAME signing identity across builds so updates install over the old app.
+      # Add repo secrets ZENRO_KEYSTORE_BASE64, ZENRO_KEYSTORE_PASSWORD, ZENRO_KEY_ALIAS, ZENRO_KEY_PASSWORD.
+      # If they are missing, the normal throw-away debug key is used.
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Optional fixed signing key
+        env:
+          KS_B64: ${{ secrets.ZENRO_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ZENRO_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ZENRO_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ZENRO_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/zenro.jks"
+            echo "ZENRO_KEYSTORE_PATH=$RUNNER_TEMP/zenro.jks" >> "$GITHUB_ENV"
+            echo "ZENRO_KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            echo "ZENRO_KEY_ALIAS=$KS_ALIAS" >> "$GITHUB_ENV"
+            echo "ZENRO_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+            echo "Using fixed signing key from secrets"
+          else
+            echo "No signing secrets set - using default debug key"
+          fi
+
+      - name: Build debug APK
+        run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZENRO-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+
+      # Tests run after the APK upload so you still get an APK to try; a red test step still shows as a failure.
+      - name: Unit tests
+        run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: app/build/reports/tests/
+          if-no-files-found: ignore

@@ -1,0 +1,286 @@
+package com.zenro.app.ui
+
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.zenro.app.VoiceViewModel
+import com.zenro.app.voice.Gender
+import com.zenro.app.voice.GeminiLiveProtocol
+import com.zenro.app.voice.Role
+import com.zenro.app.voice.SessionState
+import com.zenro.app.voice.VoiceCatalog
+
+private val Bg = Color(0xFF05070A)
+private val Panel = Color(0xFF0D1218)
+private val Cyan = Color(0xFF22D3EE)
+private val Blue = Color(0xFF2563EB)
+private val Red = Color(0xFFF87171)
+private val Dim = Color(0xFF8A97A6)
+
+@Composable
+fun ZenroApp(vm: VoiceViewModel = viewModel()) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    val level by vm.level.collectAsStateWithLifecycle()
+    val lines by vm.lines.collectAsStateWithLifecycle()
+    val error by vm.error.collectAsStateWithLifecycle()
+    val muted by vm.muted.collectAsStateWithLifecycle()
+    val voice by vm.voice.collectAsStateWithLifecycle()
+    val hasKey by vm.hasKey.collectAsStateWithLifecycle()
+    val model by vm.model.collectAsStateWithLifecycle()
+    val userName by vm.userName.collectAsStateWithLifecycle()
+    var showSettings by remember { mutableStateOf(false) }
+    val ctx = LocalContext.current
+
+    val permLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { res ->
+        if (res[Manifest.permission.RECORD_AUDIO] == true) vm.startSession()
+        else vm.reportError("Microphone permission nahi mili. Bina mic ke voice chat nahi chalegi.")
+    }
+
+    fun onOrbTap() {
+        if (state == SessionState.IDLE || state == SessionState.ERROR) {
+            val micOk = ContextCompat.checkSelfPermission(
+                ctx, Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+            if (micOk) {
+                vm.startSession()
+            } else {
+                val perms = mutableListOf(Manifest.permission.RECORD_AUDIO)
+                if (Build.VERSION.SDK_INT >= 33) perms.add(Manifest.permission.POST_NOTIFICATIONS)
+                permLauncher.launch(perms.toTypedArray())
+            }
+        } else {
+            vm.stopSession()
+        }
+    }
+
+    val listState = rememberLazyListState()
+    LaunchedEffect(lines) {
+        if (lines.isNotEmpty()) listState.animateScrollToItem(lines.lastIndex)
+    }
+
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            primary = Cyan, background = Bg, surface = Panel,
+            onBackground = Color.White, onSurface = Color.White
+        )
+    ) {
+        Surface(color = Bg, modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier.systemBarsPadding().padding(16.dp).fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("ZENRO", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Cyan, letterSpacing = 4.sp)
+                    TextButton(onClick = { showSettings = true }) { Text("Settings", color = Dim) }
+                }
+                Spacer(Modifier.height(4.dp))
+                Orb(state, level, ::onOrbTap, Modifier.size(240.dp))
+                Text(statusLabel(state, muted, hasKey), color = if (state == SessionState.ERROR) Red else Cyan, fontSize = 15.sp)
+                error?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(it, color = Red, fontSize = 13.sp, textAlign = TextAlign.Center)
+                }
+                Spacer(Modifier.height(8.dp))
+
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(lines) { line ->
+                        val mine = line.role == Role.USER
+                        Column(Modifier.fillMaxWidth(), horizontalAlignment = if (mine) Alignment.End else Alignment.Start) {
+                            Text(if (mine) "You" else "ZENRO", color = Dim, fontSize = 11.sp)
+                            Text(line.text, color = if (mine) Color.White else Cyan, fontSize = 15.sp)
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Gender.values().forEach { g ->
+                        FilterChip(
+                            selected = voice.gender == g,
+                            onClick = { vm.setGender(g) },
+                            label = { Text(if (g == Gender.MALE) "Male voice" else "Female voice") }
+                        )
+                    }
+                    OutlinedButton(onClick = { vm.toggleMute() }) { Text(if (muted) "Unmute" else "Mute") }
+                }
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()).padding(top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    VoiceCatalog.forGender(voice.gender).forEach { v ->
+                        FilterChip(selected = v.apiName == voice.apiName, onClick = { vm.setVoice(v) }, label = { Text(v.apiName) })
+                    }
+                }
+            }
+        }
+        if (showSettings) {
+            SettingsDialog(
+                hasKey = hasKey,
+                model = model,
+                userName = userName,
+                onSave = { k, m, n -> vm.saveSettings(k, m, n); showSettings = false },
+                onDismiss = { showSettings = false }
+            )
+        }
+    }
+}
+
+private fun statusLabel(state: SessionState, muted: Boolean, hasKey: Boolean): String = when (state) {
+    SessionState.IDLE -> if (hasKey) "Tap the orb to talk" else "Settings mein API key daalo, phir orb tap karo"
+    SessionState.CONNECTING -> "Connecting..."
+    SessionState.RECONNECTING -> "Reconnecting..."
+    SessionState.LISTENING -> if (muted) "Muted" else "Listening"
+    SessionState.SPEAKING -> "Speaking (bol ke beech mein rok sakte ho)"
+    SessionState.ERROR -> "Error - orb tap karke dobara try karo"
+}
+
+@Composable
+private fun Orb(state: SessionState, level: Float, onClick: () -> Unit, modifier: Modifier) {
+    val transition = rememberInfiniteTransition(label = "orb")
+    val pulse by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(2200, easing = LinearEasing), RepeatMode.Reverse),
+        label = "pulse"
+    )
+    val target = when (state) {
+        SessionState.IDLE, SessionState.ERROR -> 0f
+        SessionState.CONNECTING, SessionState.RECONNECTING -> 0.25f
+        SessionState.LISTENING -> level * 0.5f
+        SessionState.SPEAKING -> 0.2f + level * 0.6f
+    }
+    val smooth by animateFloatAsState(target, tween(120), label = "level")
+    val color = if (state == SessionState.ERROR) Red else Cyan
+
+    Canvas(
+        modifier = modifier.clickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onClick = onClick
+        )
+    ) {
+        val c = center
+        val base = size.minDimension / 2f * 0.55f
+        val r = base * (1f + 0.06f * pulse + smooth * 0.5f)
+        drawCircle(
+            brush = Brush.radialGradient(listOf(color.copy(alpha = 0.35f), Color.Transparent), center = c, radius = r * 1.6f),
+            radius = r * 1.6f, center = c
+        )
+        drawCircle(
+            brush = Brush.radialGradient(listOf(Color.White.copy(alpha = 0.9f), color, Blue), center = c, radius = r),
+            radius = r, center = c
+        )
+        drawCircle(color = color.copy(alpha = 0.5f), radius = r * 1.2f, center = c, style = Stroke(2.dp.toPx()))
+    }
+}
+
+@Composable
+private fun SettingsDialog(hasKey: Boolean, model: String, userName: String, onSave: (String, String, String) -> Unit, onDismiss: () -> Unit) {
+    var key by remember { mutableStateOf("") }
+    var m by remember { mutableStateOf(model) }
+    var name by remember { mutableStateOf(userName) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Settings") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    if (hasKey) "API key saved (hidden). Naya daalo to replace ho jayegi."
+                    else "Gemini API key abhi set nahi hai.",
+                    fontSize = 13.sp, color = Dim
+                )
+                OutlinedTextField(
+                    value = key, onValueChange = { key = it },
+                    label = { Text("Gemini API key") }, singleLine = true,
+                    visualTransformation = PasswordVisualTransformation()
+                )
+                OutlinedTextField(
+                    value = name, onValueChange = { name = it },
+                    label = { Text("Aapka naam (ZENRO isse bulayegi/bulayega)") }, singleLine = true
+                )
+                OutlinedTextField(
+                    value = m, onValueChange = { m = it },
+                    label = { Text("Live model name") }, singleLine = true
+                )
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        GeminiLiveProtocol.DEFAULT_MODEL,
+                        GeminiLiveProtocol.EXTENDED_MODEL,
+                        GeminiLiveProtocol.LEGACY_MODEL
+                    ).forEach { opt ->
+                        FilterChip(selected = m == opt, onClick = { m = opt }, label = { Text(opt, fontSize = 11.sp) })
+                    }
+                }
+                Text("Key is phone mein encrypted store hoti hai, kahin upload nahi hoti (sirf Google ko voice ke saath jaati hai).", fontSize = 12.sp, color = Dim)
+            }
+        },
+        confirmButton = { TextButton(onClick = { onSave(key.trim(), m.trim(), name.trim()) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
