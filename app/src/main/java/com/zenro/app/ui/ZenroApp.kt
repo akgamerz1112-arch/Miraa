@@ -440,7 +440,6 @@ private fun SettingsDialog(vm: VoiceViewModel, onDismiss: () -> Unit) {
     val keyTest by vm.keyTest.collectAsStateWithLifecycle()
     val micGain by vm.micGain.collectAsStateWithLifecycle()
     val emotion by vm.emotion.collectAsStateWithLifecycle()
-    var cm by remember { mutableStateOf(vm.chatModel.value) }
     var key by remember { mutableStateOf("") }
     var m by remember { mutableStateOf(vm.model.value) }
     var name by remember { mutableStateOf(vm.userName.value) }
@@ -544,19 +543,16 @@ private fun SettingsDialog(vm: VoiceViewModel, onDismiss: () -> Unit) {
                 }
                 Text(
                     "Awaaz tumhare mood ke hisaab se badalti hai aur ZENRO kabhi-kabhi chup bhi reh sakti hai jab baat usse nahi hoti. " +
-                        "Google ke docs ke mutabik sirf 2.5 native-audio model pe chalta hai (upar wala 2.5-native-audio chip chuno). " +
-                        "Server mana kare to voice bina emotion ke chalu rahegi.",
+                        "Google ke docs ke mutabik gemini-3.8-live aur 2.5 native-audio dono pe chalta hai. " +
+                        "Agar server mana kare to app khud doosra tareeka try karti hai, phir bina emotion ke voice chalu rakhti hai.",
                     fontSize = 11.sp, color = Dim
                 )
-                OutlinedTextField(
-                    value = cm, onValueChange = { cm = it },
-                    label = { Text("Chat model name (text chat ke liye)") }, singleLine = true
-                )
+                Text("Chat bhi isi Live model se chalti hai (upar wala model), alag flash model nahi.", fontSize = 11.sp, color = Dim)
                 Text("Key is phone mein encrypted store hoti hai, kahin upload nahi hoti (sirf Google ko voice ke saath jaati hai). Style/speed badalne pe session naya shuru hota hai.", fontSize = 12.sp, color = Dim)
             }
         },
         confirmButton = {
-            TextButton(onClick = { vm.saveSettings(key.trim(), m.trim(), name.trim(), cm.trim()); onDismiss() }) { Text("Save") }
+            TextButton(onClick = { vm.saveSettings(key.trim(), m.trim(), name.trim(), ""); onDismiss() }) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )

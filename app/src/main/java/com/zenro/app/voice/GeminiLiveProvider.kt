@@ -51,6 +51,8 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
     @Volatile private var toolsOn = false
     @Volatile private var everReady = false
     @Volatile private var emotionOn = false
+    @Volatile private var emotionAlpha = false
+    private var emotionStage = 0
     // Tiered safety net: if the server rejects the first setup, drop optional parts step by step.
     @Volatile private var level = 0
     @Volatile private var tempOn = true
@@ -76,6 +78,8 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         toolsOn = config.memoryTool || (config.control && config.screenShare)
         shareOn = config.screenShare
         emotionOn = config.emotion
+        emotionAlpha = false
+        emotionStage = 0
         level = 0
         tempOn = true
         startHigh = true
@@ -146,7 +150,7 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
     private fun connect() {
         ready = false
         cb.onState(if (attempts == 0) SessionState.CONNECTING else SessionState.RECONNECTING)
-        val req = Request.Builder().url(GeminiLiveProtocol.endpoint(config.apiKey, emotionOn)).build()
+        val req = Request.Builder().url(GeminiLiveProtocol.endpoint(config.apiKey, emotionOn && emotionAlpha)).build()
         ws = client.newWebSocket(req, listener)
     }
 
@@ -185,6 +189,28 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         return true
     }
 
+    /**
+     * Emotion mode failed before the session ever started (server refusal OR a dropped handshake, which looks like
+     * "no internet"). Try the other API version once, then fall back to plain voice instead of showing an error.
+     */
+    private fun emotionFallback(): Boolean {
+        if (stopped || everReady || !emotionOn) return false
+        emotionStage++
+        if (emotionStage == 1) {
+            emotionAlpha = !emotionAlpha
+            cb.onAction("Emotion mode ke liye doosra API version try kar rahi hoon.")
+        } else {
+            emotionOn = false
+            emotionAlpha = false
+            cb.onAction("Emotion mode is model pe nahi chala, bina emotion ke voice chalu kar rahi hoon.")
+        }
+        val old = ws
+        ws = null
+        try { old?.close(1000, "retry") } catch (_: Exception) {}
+        handler.post { if (!stopped) connect() }
+        return true
+    }
+
     private fun fail(message: String) {
         if (stopped) return
         stopped = true
@@ -196,6 +222,7 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         if (stopped) return
         ready = false
         speaking = false
+        if (emotionFallback()) return
         val fatal = (httpCode != null && httpCode in 400..499) ||
             closeCode == 1007 || closeCode == 1008 || closeCode == 1003
         if (fatal && degrade()) return
@@ -267,7 +294,7 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
                 is ServerEvent.ToolCall -> handleTool(e)
                 is ServerEvent.GoAway -> { /* server will close soon; reconnect happens on drop */ }
                 is ServerEvent.ResumptionHandle -> resumeHandle = e.handle
-                is ServerEvent.Error -> if (!degrade()) fail(Errors.closed(0, e.message))
+                is ServerEvent.Error -> if (!emotionFallback() && !degrade()) fail(Errors.closed(0, e.message))
             }
         }
     }

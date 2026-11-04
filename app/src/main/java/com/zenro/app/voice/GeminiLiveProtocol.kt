@@ -38,7 +38,7 @@ object GeminiLiveProtocol {
     const val LEGACY_MODEL = "gemini-3.1-flash-live-preview"
     const val EXTENDED_MODEL = "gemini-3.8-live-extended-thinking"
     /** The model used in the "Friday" video; Google lists affective dialog + proactive audio only for 2.5 native-audio Live models. */
-    const val NATIVE_AUDIO_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
+    const val NATIVE_AUDIO_MODEL = "gemini-live-2.5-flash-native-audio"
     const val INPUT_SAMPLE_RATE = 16000
     const val OUTPUT_SAMPLE_RATE = 24000
 
@@ -233,6 +233,10 @@ object GeminiLiveProtocol {
             .put("toolResponse", JSONObject().put("functionResponses", JSONArray().put(resp)))
             .toString()
     }
+
+    /** One typed message sent into a Live session (used by the Chat tab). */
+    fun buildTextInput(text: String): String =
+        JSONObject().put("realtimeInput", JSONObject().put("text", text)).toString()
 
     fun buildAudioChunk(pcm: ByteArray, length: Int): String {
         val b64 = Base64.getEncoder().encodeToString(pcm.copyOf(length))

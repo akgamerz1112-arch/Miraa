@@ -8,7 +8,7 @@ import com.zenro.app.audio.AudioLogic
 import com.zenro.app.audio.RoutePref
 import com.zenro.app.chat.ChatResult
 import com.zenro.app.control.ZenroAccessibilityService
-import com.zenro.app.chat.TextChatClient
+import com.zenro.app.chat.LiveChatClient
 import com.zenro.app.data.KeyTester
 import com.zenro.app.data.SecureStore
 import com.zenro.app.memory.MemoryItem
@@ -87,7 +87,7 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
     val chatModel: StateFlow<String> = _chatModel.asStateFlow()
 
     // Typed Chat tab (separate from the voice transcript).
-    private val chatClient = TextChatClient()
+    private val chatClient = LiveChatClient()
     private val chatSeed = Random.nextInt().let { if (it == 0) 1 else it }
     private val _chat = MutableStateFlow<List<ChatLine>>(emptyList())
     val chat: StateFlow<List<ChatLine>> = _chat.asStateFlow()
@@ -366,8 +366,10 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
             if (store.memoryOn) MemoryMode.TAG else MemoryMode.NONE,
             chatSeed, dayPart()
         )
-        val history = _chat.value.map { it.role to it.text }
-        chatClient.send(key, store.chatModel, system, history) { res ->
+        val prior = _chat.value.dropLast(1).map { it.role to it.text }
+        val fullSystem = if (prior.isEmpty()) system else
+            system + "\n\nEARLIER IN THIS CHAT (continue naturally, do not repeat it):\n" + Persona.recap(prior, maxLines = 20, maxChars = 3000)
+        chatClient.send(key, store.model, _voice.value.apiName, fullSystem, t) { res ->
             when (res) {
                 is ChatResult.Ok -> {
                     val (clean, facts) = MemoryLogic.extractTags(res.text)
