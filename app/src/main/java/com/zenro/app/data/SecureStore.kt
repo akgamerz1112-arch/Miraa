@@ -65,6 +65,41 @@ class SecureStore(private val context: Context) {
         get() = prefs.getString("user_gender", "") ?: ""
         set(v) = prefs.edit { putString("user_gender", v) }
 
+    var micGain: Float
+        get() = prefs.getFloat("mic_gain", com.zenro.app.audio.AudioLogic.MIC_DEFAULT_GAIN)
+        set(v) = prefs.edit { putFloat("mic_gain", v) }
+
+    /** Model for the typed Chat tab (separate from the Live voice model). */
+    var chatModel: String
+        get() = prefs.getString("chat_model", com.zenro.app.chat.GeminiTextProtocol.DEFAULT_MODEL)
+            ?: com.zenro.app.chat.GeminiTextProtocol.DEFAULT_MODEL
+        set(v) = prefs.edit { putString("chat_model", v) }
+
+    /** Auto-save things worth remembering (Yaadein). Default on. */
+    var memoryOn: Boolean
+        get() = prefs.getBoolean("memory_on", true)
+        set(v) = prefs.edit { putBoolean("memory_on", v) }
+
+    /** Yaadein as JSON (see MemoryLogic). Encrypted on the phone. */
+    var memoryJson: String
+        get() = prefs.getString("memory_json", "") ?: ""
+        set(v) = prefs.edit { putString("memory_json", v) }
+
+    /** Show the phone screen to ZENRO during voice sessions. Off by default. */
+    var screenShare: Boolean
+        get() = prefs.getBoolean("screen_share", false)
+        set(v) = prefs.edit { putBoolean("screen_share", v) }
+
+    /** Let ZENRO tap/type/open apps (needs screenShare). Off by default. */
+    var screenControl: Boolean
+        get() = prefs.getBoolean("screen_control", false)
+        set(v) = prefs.edit { putBoolean("screen_control", v) }
+
+    /** Affective dialog + proactive audio. Off by default; needs a 2.5 native-audio model. */
+    var emotionMode: Boolean
+        get() = prefs.getBoolean("emotion_mode", false)
+        set(v) = prefs.edit { putBoolean("emotion_mode", v) }
+
     companion object {
         private const val FILE = "zenro_secure"
     }

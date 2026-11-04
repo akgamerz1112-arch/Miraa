@@ -37,6 +37,15 @@ data class VoiceConfig(
     val routePref: RoutePref = RoutePref.AUTO,
     val gain: Float = AudioLogic.DEFAULT_GAIN,
     val vad: VadPreset = VadPreset.NORMAL,
+    val micGain: Float = AudioLogic.MIC_DEFAULT_GAIN,
+    /** Offer the model a `save_memory` function so it can remember things across days. */
+    val memoryTool: Boolean = false,
+    /** Send the phone screen to the model about once a second. */
+    val screenShare: Boolean = false,
+    /** Let the model tap/type/open apps (only meaningful together with [screenShare]). */
+    val control: Boolean = false,
+    /** Affective dialog + proactive audio (2.5 native-audio models, v1alpha). */
+    val emotion: Boolean = false,
 )
 
 interface VoiceCallbacks {
@@ -47,6 +56,10 @@ interface VoiceCallbacks {
     fun onError(message: String)
     /** Human-readable active output, e.g. "Awaaz: Bluetooth Buds (HQ)". */
     fun onRoute(label: String) {}
+    /** The model wants to remember [fact]. Return true only if it was really saved. */
+    fun onMemory(fact: String): Boolean = false
+    /** Short Hinglish line about what ZENRO is doing on the phone right now. */
+    fun onAction(text: String) {}
 }
 
 /** Common interface so other real-time voice providers can be added later. */
@@ -55,5 +68,7 @@ interface VoiceProvider {
     fun stop()
     fun setMuted(muted: Boolean)
     fun setGain(gain: Float) {}
+    fun setMicGain(gain: Float) {}
+    fun setScreenShare(on: Boolean) {}
     fun setRoutePref(pref: RoutePref) {}
 }

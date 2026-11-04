@@ -3,11 +3,14 @@ package com.zenro.app.voice
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import com.zenro.app.audio.AudioLogic
 import com.zenro.app.audio.AudioRouter
 import com.zenro.app.audio.MicStreamer
 import com.zenro.app.audio.Pcm
 import com.zenro.app.audio.PcmPlayer
 import com.zenro.app.audio.RoutePref
+import com.zenro.app.control.ScreenControl
+import com.zenro.app.control.ScreenStreamer
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -44,6 +47,14 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
     @Volatile private var speaking = false
     @Volatile private var ws: WebSocket? = null
     @Volatile private var resumeHandle: String? = null
+    @Volatile private var micGain = AudioLogic.MIC_DEFAULT_GAIN
+    @Volatile private var toolsOn = false
+    @Volatile private var everReady = false
+    @Volatile private var emotionOn = false
+    @Volatile private var shareOn = false
+    private val streamer = ScreenStreamer { jpeg ->
+        if (ready && !stopped) ws?.send(GeminiLiveProtocol.buildVideoFrame(jpeg))
+    }
     private var attempts = 0
     @Volatile private var route: AudioRouter.Applied? = null
     @Volatile private var routeChecked = false
@@ -56,6 +67,11 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         stopped = false
         attempts = 0
         resumeHandle = null
+        micGain = AudioLogic.clampMicGain(config.micGain)
+        toolsOn = config.memoryTool || (config.control && config.screenShare)
+        shareOn = config.screenShare
+        emotionOn = config.emotion
+        everReady = false
         player.gain = config.gain
         applyRoute()
         router.listen(handler) { scheduleRerouteCheck() }
@@ -74,6 +90,15 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
 
     override fun setGain(gain: Float) {
         player.gain = gain
+    }
+
+    override fun setScreenShare(on: Boolean) {
+        shareOn = on
+        if (on && ready && !stopped) streamer.start() else if (!on) streamer.stop()
+    }
+
+    override fun setMicGain(gain: Float) {
+        micGain = AudioLogic.clampMicGain(gain)
     }
 
     override fun setRoutePref(pref: RoutePref) {
@@ -112,7 +137,7 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
     private fun connect() {
         ready = false
         cb.onState(if (attempts == 0) SessionState.CONNECTING else SessionState.RECONNECTING)
-        val req = Request.Builder().url(GeminiLiveProtocol.endpoint(config.apiKey)).build()
+        val req = Request.Builder().url(GeminiLiveProtocol.endpoint(config.apiKey, emotionOn)).build()
         ws = client.newWebSocket(req, listener)
     }
 
@@ -120,6 +145,7 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         handler.removeCallbacksAndMessages(null)
         ready = false
         speaking = false
+        streamer.stop()
         try { ws?.close(1000, "bye") } catch (_: Exception) {}
         ws = null
         mic.stop()
@@ -127,6 +153,19 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         router.unlisten()
         router.restore()
         route = null
+    }
+
+    /** If the server refuses the very first setup while the memory tool is on, retry once without it. */
+    private fun retryWithoutTools(): Boolean {
+        if (stopped || everReady || !(toolsOn || emotionOn)) return false
+        toolsOn = false
+        emotionOn = false
+        if (config.control || config.emotion) cb.onAction("Server ne extras mana kiye, isliye memory, control aur emotion mode band hain. Voice chalu hai.")
+        val old = ws
+        ws = null // so the old socket's close callback is ignored
+        try { old?.close(1000, "retry") } catch (_: Exception) {}
+        handler.post { if (!stopped) connect() }
+        return true
     }
 
     private fun fail(message: String) {
@@ -142,6 +181,7 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         speaking = false
         val fatal = (httpCode != null && httpCode in 400..499) ||
             closeCode == 1007 || closeCode == 1008 || closeCode == 1003
+        if (fatal && retryWithoutTools()) return
         if (fatal || attempts >= MAX_ATTEMPTS) {
             fail(message)
             return
@@ -159,7 +199,8 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
             mic.start(
                 onChunk = { buf, len ->
                     if (ready && !muted.get()) {
-                        ws?.send(GeminiLiveProtocol.buildAudioChunk(buf, len))
+                        val data = if (micGain > 1.01f) AudioLogic.applyGain(buf.copyOf(len), micGain) else buf
+                        ws?.send(GeminiLiveProtocol.buildAudioChunk(data, len))
                     }
                 },
                 onLevel = { lvl ->
@@ -178,6 +219,8 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
             when (e) {
                 is ServerEvent.SetupComplete -> {
                     ready = true
+                    everReady = true
+                    if (shareOn) streamer.start()
                     attempts = 0
                     cb.onState(SessionState.LISTENING)
                     startMicIfNeeded()
@@ -204,10 +247,30 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
                 }
                 is ServerEvent.InputText -> cb.onTranscript(Role.USER, e.text)
                 is ServerEvent.OutputText -> cb.onTranscript(Role.ASSISTANT, e.text)
+                is ServerEvent.ToolCall -> handleTool(e)
                 is ServerEvent.GoAway -> { /* server will close soon; reconnect happens on drop */ }
                 is ServerEvent.ResumptionHandle -> resumeHandle = e.handle
-                is ServerEvent.Error -> fail(Errors.closed(0, e.message ?: ""))
+                is ServerEvent.Error -> if (!retryWithoutTools()) fail(Errors.closed(0, e.message))
             }
+        }
+    }
+
+    private fun handleTool(e: ServerEvent.ToolCall) {
+        fun reply(ok: Boolean, detail: String?) {
+            ws?.send(GeminiLiveProtocol.buildToolResponse(e.id, e.name, ok, detail))
+        }
+        when {
+            e.name == GeminiLiveProtocol.TOOL_SAVE_MEMORY ->
+                reply(cb.onMemory(e.args.optString("fact")), null)
+            e.name in GeminiLiveProtocol.SCREEN_TOOLS -> {
+                if (!(config.control && config.screenShare && toolsOn)) {
+                    reply(false, "Control band hai. User ne allow nahi kiya.")
+                } else {
+                    cb.onAction(ScreenControl.describe(e.name, e.args))
+                    ScreenControl.run(e.name, e.args) { ok, detail -> reply(ok, detail) }
+                }
+            }
+            else -> reply(false, "Unknown function.")
         }
     }
 
@@ -216,7 +279,12 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
             val handle = resumeHandle
             val prompt = if (handle == null && attempts > 0) config.promptForNewSession() else config.systemPrompt
             webSocket.send(
-                GeminiLiveProtocol.buildSetup(config.model, config.voiceName, prompt, handle, config.vad)
+                GeminiLiveProtocol.buildSetup(
+                    config.model, config.voiceName, prompt, handle, config.vad,
+                    memoryTool = toolsOn && config.memoryTool, temperature = 1.0f,
+                    controlTools = toolsOn && config.control && config.screenShare,
+                    emotion = emotionOn
+                )
             )
         }
 

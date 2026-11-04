@@ -14,6 +14,13 @@ object AudioLogic {
     const val DEFAULT_GAIN = 1.6f
     private const val KNEE = 26000f
 
+    /** Microphone boost so quiet / soft speech still reaches the server (1.0 = off). */
+    const val MIC_MIN_GAIN = 1.0f
+    const val MIC_MAX_GAIN = 4.0f
+    const val MIC_DEFAULT_GAIN = 2.0f
+
+    fun clampMicGain(g: Float): Float = g.coerceIn(MIC_MIN_GAIN, MIC_MAX_GAIN)
+
     fun chooseRoute(devices: List<OutKind>, pref: RoutePref): RouteMode {
         val hasHeadphones = devices.any { it == OutKind.BLUETOOTH || it == OutKind.WIRED }
         return when (pref) {
