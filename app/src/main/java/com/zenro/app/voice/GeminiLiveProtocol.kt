@@ -58,6 +58,8 @@ object GeminiLiveProtocol {
         controlTools: Boolean = false,
         emotion: Boolean = false,
         startHigh: Boolean = true,
+        compression: Boolean = true,
+        resumption: Boolean = true,
     ): String {
         val fullModel = if (model.startsWith("models/")) model else "models/$model"
         val voice = JSONObject().put(
@@ -78,13 +80,14 @@ object GeminiLiveProtocol {
             )
             .put("inputAudioTranscription", JSONObject())
             .put("outputAudioTranscription", JSONObject())
-            // Lets a conversation run longer than the default audio-only limit.
-            .put("contextWindowCompression", JSONObject().put("slidingWindow", JSONObject()))
+        if (compression) setup.put("contextWindowCompression", JSONObject().put("slidingWindow", JSONObject()))
+        if (resumption) {
             // Server sends resumption handles; passing one back continues the same conversation.
-            .put(
+            setup.put(
                 "sessionResumption",
                 JSONObject().also { if (!resumeHandle.isNullOrEmpty()) it.put("handle", resumeHandle) }
             )
+        }
         if (vad != null) {
             setup.put(
                 "realtimeInputConfig",

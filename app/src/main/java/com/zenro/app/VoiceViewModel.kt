@@ -363,13 +363,17 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
         val system = Persona.chatPrompt(
             _voice.value.gender, store.userName, _style.value, _userGender.value,
             MemoryLogic.promptBlock(_memories.value),
-            if (store.memoryOn) MemoryMode.TAG else MemoryMode.NONE,
+            if (store.memoryOn) MemoryMode.TOOL else MemoryMode.NONE,
             chatSeed, dayPart()
-        )
+        ) + "\n\nVOICE: your reply is ALSO spoken aloud in your own voice, so write exactly as you would speak it: no emojis, no symbols, no markdown, and show your emotion in how you say it."
         val prior = _chat.value.dropLast(1).map { it.role to it.text }
         val fullSystem = if (prior.isEmpty()) system else
             system + "\n\nEARLIER IN THIS CHAT (continue naturally, do not repeat it):\n" + Persona.recap(prior, maxLines = 20, maxChars = 3000)
-        chatClient.send(key, store.model, _voice.value.apiName, fullSystem, t) { res ->
+        chatClient.send(
+            key, store.model, _voice.value.apiName, fullSystem, t,
+            emotion = store.emotionMode, speak = true, gain = _gain.value,
+            onMemory = { fact -> saveFact(fact) }
+        ) { res ->
             when (res) {
                 is ChatResult.Ok -> {
                     val (clean, facts) = MemoryLogic.extractTags(res.text)
@@ -383,6 +387,7 @@ class VoiceViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun clearChat() {
+        chatClient.stopSpeaking()
         _chat.value = emptyList()
         _chatError.value = null
     }

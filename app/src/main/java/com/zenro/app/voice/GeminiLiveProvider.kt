@@ -52,6 +52,8 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
     @Volatile private var everReady = false
     @Volatile private var emotionOn = false
     @Volatile private var emotionAlpha = false
+    @Volatile private var compOn = true
+    @Volatile private var modelOverride: String? = null
     private var emotionStage = 0
     // Tiered safety net: if the server rejects the first setup, drop optional parts step by step.
     @Volatile private var level = 0
@@ -80,11 +82,15 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         emotionOn = config.emotion
         emotionAlpha = false
         emotionStage = 0
+        compOn = true
+        modelOverride = null
         level = 0
         tempOn = true
         startHigh = true
         vadOn = true
         everReady = false
+        level = 0
+        if (rememberedLevel > 0) { level = rememberedLevel; applyLevel(level) }
         player.gain = config.gain
         applyRoute()
         router.listen(handler) { scheduleRerouteCheck() }
@@ -173,15 +179,26 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
      * 1) memory/control tools + emotion, 2) temperature + high start sensitivity, 3) the VAD block.
      * Level 3 is the plain v0.1-style setup. Returns false when nothing is left to drop.
      */
-    private fun degrade(): Boolean {
-        if (stopped || everReady || level >= 3) return false
-        level++
-        when (level) {
-            1 -> { toolsOn = false; emotionOn = false }
-            2 -> { tempOn = false; startHigh = false }
-            else -> vadOn = false
+    private fun applyLevel(l: Int) {
+        if (l >= 1) { toolsOn = false; emotionOn = false }
+        if (l >= 2) { tempOn = false; startHigh = false }
+        if (l >= 3) vadOn = false
+        if (l >= 4) compOn = false
+        modelOverride = when {
+            l >= 6 -> GeminiLiveProtocol.LEGACY_MODEL
+            l == 5 -> GeminiLiveProtocol.NATIVE_AUDIO_MODEL
+            else -> null
         }
-        cb.onAction("Server ne setup mana kiya, simple setup try kar rahi hoon (step $level/3).")
+    }
+
+    private fun degrade(): Boolean {
+        if (stopped || everReady || level >= MAX_LEVEL) return false
+        level++
+        applyLevel(level)
+        cb.onAction(
+            if (level >= 5) "Doosra model try kar rahi hoon: ${modelOverride} (step $level/$MAX_LEVEL)."
+            else "Server ne setup mana kiya, simple setup try kar rahi hoon (step $level/$MAX_LEVEL)."
+        )
         val old = ws
         ws = null // so the old socket's close callback is ignored
         try { old?.close(1000, "retry") } catch (_: Exception) {}
@@ -264,6 +281,8 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
                 is ServerEvent.SetupComplete -> {
                     ready = true
                     everReady = true
+                    rememberedLevel = level
+                    modelOverride?.let { cb.onAction("Ye model chal gaya: $it. Settings mein ise chuno.") }
                     if (shareOn) streamer.start()
                     attempts = 0
                     cb.onState(SessionState.LISTENING)
@@ -324,11 +343,13 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
             val prompt = if (handle == null && attempts > 0) config.promptForNewSession() else config.systemPrompt
             webSocket.send(
                 GeminiLiveProtocol.buildSetup(
-                    config.model, config.voiceName, prompt, handle, if (vadOn) config.vad else null,
+                    modelOverride ?: config.model, config.voiceName, prompt, handle, if (vadOn) config.vad else null,
                     memoryTool = toolsOn && config.memoryTool, temperature = if (tempOn) 1.0f else null,
                     controlTools = toolsOn && config.control && config.screenShare,
                     emotion = emotionOn,
-                    startHigh = startHigh
+                    startHigh = startHigh,
+                    compression = compOn,
+                    resumption = compOn
                 )
             )
         }
@@ -358,5 +379,8 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
 
     companion object {
         private const val MAX_ATTEMPTS = 4
+        private const val MAX_LEVEL = 6
+        /** The simplest-working setup level found in this app run, so the next session skips the failed steps. */
+        @Volatile private var rememberedLevel = 0
     }
 }

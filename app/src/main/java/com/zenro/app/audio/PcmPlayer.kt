@@ -86,6 +86,18 @@ class PcmPlayer(private val sampleRate: Int = 24000) {
         } catch (_: Exception) {}
     }
 
+    /** Let everything already queued finish playing, then release the speaker (used by spoken chat replies). */
+    fun stopWhenDrained(maxWaitMs: Long = 60000) {
+        Thread({
+            val end = System.currentTimeMillis() + maxWaitMs
+            while (queue.isNotEmpty() && running && System.currentTimeMillis() < end) {
+                try { Thread.sleep(100) } catch (_: Exception) { break }
+            }
+            try { Thread.sleep(1200) } catch (_: Exception) {}
+            stop()
+        }, "zenro-play-drain").start()
+    }
+
     fun stop() {
         if (!running && track == null) return
         running = false
