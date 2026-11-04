@@ -33,7 +33,7 @@ sealed interface ServerEvent {
  */
 object GeminiLiveProtocol {
     // Model name is user-editable in Settings because Google renames Live models often.
-    const val DEFAULT_MODEL = "gemini-3.8-live"
+    const val DEFAULT_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
     /** Older model, kept as a fallback the user can pick in Settings. */
     const val LEGACY_MODEL = "gemini-3.1-flash-live-preview"
     const val EXTENDED_MODEL = "gemini-3.8-live-extended-thinking"

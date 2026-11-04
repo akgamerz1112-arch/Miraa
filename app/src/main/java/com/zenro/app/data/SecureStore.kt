@@ -97,7 +97,7 @@ class SecureStore(private val context: Context) {
 
     /** Affective dialog + proactive audio. Off by default; needs a 2.5 native-audio model. */
     var emotionMode: Boolean
-        get() = prefs.getBoolean("emotion_mode", false)
+        get() = prefs.getBoolean("emotion_mode", true)
         set(v) = prefs.edit { putBoolean("emotion_mode", v) }
 
     companion object {

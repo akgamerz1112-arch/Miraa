@@ -530,9 +530,9 @@ private fun SettingsDialog(vm: VoiceViewModel, onDismiss: () -> Unit) {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(
                         GeminiLiveProtocol.DEFAULT_MODEL,
+                        "gemini-3.8-live",
                         GeminiLiveProtocol.EXTENDED_MODEL,
-                        GeminiLiveProtocol.LEGACY_MODEL,
-                        GeminiLiveProtocol.NATIVE_AUDIO_MODEL
+                        GeminiLiveProtocol.LEGACY_MODEL
                     ).forEach { opt ->
                         FilterChip(selected = m == opt, onClick = { m = opt }, label = { Text(opt, fontSize = 11.sp) })
                     }

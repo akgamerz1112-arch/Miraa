@@ -151,3 +151,4 @@ ZENRO therefore CANNOT open apps, call, message or browse yet. It only talks.
 - Chat tab now uses the Live model (no flash). Reply is spoken (audio plays) AND shown as text (output transcription). Memory tool works in chat. Falls back emotion+memory -> memory -> plain.
 - NOT done yet: greet-first when a session starts, daily proactive check-in notifications, emotion-tagged memory store.
 - Emotion ON now first uses model gemini-2.5-flash-native-audio-preview-12-2025 on v1alpha (same as a working LiveKit agent: voice Aoede, temperature 1.0, proactivity + affective dialog), then the Settings model, then plain voice. Same order in Chat.
+- Default Live model is now gemini-2.5-flash-native-audio-preview-12-2025 and Emotion + proactive defaults to ON for new installs (installs that already saved a model/toggle keep their saved values; tap the first model chip + Save).
