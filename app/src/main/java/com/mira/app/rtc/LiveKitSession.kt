@@ -3,6 +3,7 @@ package com.mira.app.rtc
 import android.content.Context
 import io.livekit.android.LiveKit
 import io.livekit.android.events.RoomEvent
+import io.livekit.android.events.collect
 import io.livekit.android.room.Room
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -18,7 +19,7 @@ import kotlinx.coroutines.launch
  * LiveKit API names used here come from the current docs/API reference (SDK 2.30.0):
  * LiveKit.create, Room.connect(url, token), localParticipant.setMicrophoneEnabled, Room.registerRpcMethod,
  * Room.events, RoomEvent.{ParticipantConnected, ParticipantDisconnected, Disconnected, FailedToConnect,
- * Reconnecting, Reconnected}, Participant.isAgent. NOT yet compiled or run on a device.
+ * Reconnecting, Reconnected}, agent = any other participant (isAgent extension package unknown). NOT yet compiled or run on a device.
  */
 class LiveKitSession(
     context: Context,
@@ -30,7 +31,8 @@ class LiveKitSession(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var room: Room? = null
     @Volatile private var muted = false
-    private var agentHere = false
+    // Every token gets its own private room, so any other participant there is the MIRA agent.
+    private var others = 0
     private var closed = false
 
     fun start(serverUrl: String, token: String, startMuted: Boolean) {
@@ -54,8 +56,8 @@ class LiveKitSession(
                 r.connect(serverUrl, token)
                 if (closed) return@launch
                 r.localParticipant.setMicrophoneEnabled(!muted)
-                agentHere = r.remoteParticipants.values.any { it.isAgent }
-                onState(if (agentHere) ConnState.AGENT_JOINED else ConnState.WAITING_AGENT)
+                others = r.remoteParticipants.size
+                onState(if (others > 0) ConnState.AGENT_JOINED else ConnState.WAITING_AGENT)
             } catch (e: Exception) {
                 if (!closed) fail("Room join nahi hua: ${e.message?.take(120) ?: "unknown error"}")
             }
@@ -65,17 +67,17 @@ class LiveKitSession(
     private fun handleEvent(r: Room, ev: RoomEvent) {
         if (closed) return
         when (ev) {
-            is RoomEvent.ParticipantConnected -> if (ev.participant.isAgent) {
-                agentHere = true
+            is RoomEvent.ParticipantConnected -> {
+                others += 1
                 onState(ConnState.AGENT_JOINED)
             }
-            is RoomEvent.ParticipantDisconnected -> if (ev.participant.isAgent) {
-                agentHere = false
-                onState(ConnState.WAITING_AGENT)
+            is RoomEvent.ParticipantDisconnected -> {
+                others = (others - 1).coerceAtLeast(0)
+                if (others == 0) onState(ConnState.WAITING_AGENT)
             }
             is RoomEvent.Reconnecting -> onState(ConnState.RECONNECTING)
             is RoomEvent.Reconnected ->
-                onState(if (agentHere) ConnState.AGENT_JOINED else ConnState.WAITING_AGENT)
+                onState(if (others > 0) ConnState.AGENT_JOINED else ConnState.WAITING_AGENT)
             is RoomEvent.FailedToConnect -> fail("Connect nahi ho paayi: ${ev.error.message?.take(120) ?: ""}")
             is RoomEvent.Disconnected -> fail("Connection toot gaya. Orb tap karke dobara try karo.")
             else -> Unit
