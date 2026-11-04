@@ -4,12 +4,14 @@ package com.zenro.app.voice
 object Errors {
     fun closed(code: Int, reason: String): String {
         val r = reason.lowercase()
+        // The server's own words are the fastest way to find the real cause, so show a short piece of them.
+        val why = reason.trim().replace(Regex("\\s+"), " ").take(180).let { if (it.isEmpty()) "" else " Server ne kaha: $it" }
         return when {
             r.contains("quota") || r.contains("exhausted") || r.contains("rate limit") ->
                 "Free quota khatam ho gaya lagta hai. Thodi der baad dobara try karo."
             code == 1007 || code == 1008 || r.contains("api key") || r.contains("permission") ->
-                "Key ya model galat lagta hai ($code). Settings mein key aur model check karo."
-            else -> "Connection toot gaya ($code). Orb tap karke dobara try karo."
+                "Key ya model galat lagta hai ($code). Settings mein key aur model check karo.$why"
+            else -> "Connection toot gaya ($code). Orb tap karke dobara try karo.$why"
         }
     }
 

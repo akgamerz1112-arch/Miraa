@@ -1,6 +1,7 @@
 # HANDOVER (keep updated)
 
-## Where we are (v0.6, versionName 0.6.0-emotion)
+## Where we are (v0.6.1, versionName 0.6.1-safe-setup)
+First device report: v0.6 builds and installs; voice failed with close code 1007 (setup rejected). v0.6.1 adds a tiered fallback + shows the server reason. NEXT: ask the user for the new error text / which step worked.
 Code exists for: Phase 1 voice, v0.2 (audio routing, volume boost, VAD presets, styles, user gender, key test, Hinglish errors),
 v0.3 (mic boost + high start-of-speech sensitivity, natural persona with per-session vibe, Yaadein memory, typed Chat tab,
 notification mute/stop buttons, bottom tabs). Details and honest status labels: FEATURE_STATUS.md. Roadmap: ZENRO_PLAN.md.

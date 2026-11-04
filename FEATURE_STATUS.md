@@ -124,6 +124,13 @@ Google's Live API guide says both are supported on the Gemini 2.5 native-audio L
 | Server-side noise cancellation (LiveKit/Krisp) | NOT built; Android echo/noise suppression + mic boost are used instead |
 | `V06Test` (2 tests) | written, NOT RUN |
 
+## v0.6.1: voice error 1007 on the phone (first real device report)
+
+User screenshot (v0.6 installed, so the CI build is green and the app runs): orb screen says "Key ya model galat lagta hai (1007)".
+1007 means the server rejected the setup message. v0.1 voice had worked; since then the setup gained temperature, `startOfSpeechSensitivity`, the VAD block, tools and emotion fields. Which one Google rejects is NOT known yet.
+Fix (IMPLEMENTED, not run): tiered fallback in `GeminiLiveProvider.degrade()`: step 1 drop tools + emotion, step 2 drop temperature + start sensitivity, step 3 drop the VAD block (= plain v0.1 setup). Errors now include the server's own reason text ("Server ne kaha: ..."). Tests: `V07Test`, not run.
+Also to try: Settings > Live model name > chip `gemini-3.1-flash-live-preview`.
+
 ## Not started (Phases 2-9)
 
 Sarvam voices, camera/vision, persistent memory, phone control, communication, wake word, background reliability,

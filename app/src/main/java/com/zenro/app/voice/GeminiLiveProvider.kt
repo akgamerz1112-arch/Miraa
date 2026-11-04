@@ -51,6 +51,11 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
     @Volatile private var toolsOn = false
     @Volatile private var everReady = false
     @Volatile private var emotionOn = false
+    // Tiered safety net: if the server rejects the first setup, drop optional parts step by step.
+    @Volatile private var level = 0
+    @Volatile private var tempOn = true
+    @Volatile private var startHigh = true
+    @Volatile private var vadOn = true
     @Volatile private var shareOn = false
     private val streamer = ScreenStreamer { jpeg ->
         if (ready && !stopped) ws?.send(GeminiLiveProtocol.buildVideoFrame(jpeg))
@@ -71,6 +76,10 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         toolsOn = config.memoryTool || (config.control && config.screenShare)
         shareOn = config.screenShare
         emotionOn = config.emotion
+        level = 0
+        tempOn = true
+        startHigh = true
+        vadOn = true
         everReady = false
         player.gain = config.gain
         applyRoute()
@@ -155,12 +164,20 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         route = null
     }
 
-    /** If the server refuses the very first setup while the memory tool is on, retry once without it. */
-    private fun retryWithoutTools(): Boolean {
-        if (stopped || everReady || !(toolsOn || emotionOn)) return false
-        toolsOn = false
-        emotionOn = false
-        if (config.control || config.emotion) cb.onAction("Server ne extras mana kiye, isliye memory, control aur emotion mode band hain. Voice chalu hai.")
+    /**
+     * The server refused the very first setup. Drop optional parts one step at a time and reconnect:
+     * 1) memory/control tools + emotion, 2) temperature + high start sensitivity, 3) the VAD block.
+     * Level 3 is the plain v0.1-style setup. Returns false when nothing is left to drop.
+     */
+    private fun degrade(): Boolean {
+        if (stopped || everReady || level >= 3) return false
+        level++
+        when (level) {
+            1 -> { toolsOn = false; emotionOn = false }
+            2 -> { tempOn = false; startHigh = false }
+            else -> vadOn = false
+        }
+        cb.onAction("Server ne setup mana kiya, simple setup try kar rahi hoon (step $level/3).")
         val old = ws
         ws = null // so the old socket's close callback is ignored
         try { old?.close(1000, "retry") } catch (_: Exception) {}
@@ -181,7 +198,7 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         speaking = false
         val fatal = (httpCode != null && httpCode in 400..499) ||
             closeCode == 1007 || closeCode == 1008 || closeCode == 1003
-        if (fatal && retryWithoutTools()) return
+        if (fatal && degrade()) return
         if (fatal || attempts >= MAX_ATTEMPTS) {
             fail(message)
             return
@@ -250,7 +267,7 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
                 is ServerEvent.ToolCall -> handleTool(e)
                 is ServerEvent.GoAway -> { /* server will close soon; reconnect happens on drop */ }
                 is ServerEvent.ResumptionHandle -> resumeHandle = e.handle
-                is ServerEvent.Error -> if (!retryWithoutTools()) fail(Errors.closed(0, e.message))
+                is ServerEvent.Error -> if (!degrade()) fail(Errors.closed(0, e.message))
             }
         }
     }
@@ -280,10 +297,11 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
             val prompt = if (handle == null && attempts > 0) config.promptForNewSession() else config.systemPrompt
             webSocket.send(
                 GeminiLiveProtocol.buildSetup(
-                    config.model, config.voiceName, prompt, handle, config.vad,
-                    memoryTool = toolsOn && config.memoryTool, temperature = 1.0f,
+                    config.model, config.voiceName, prompt, handle, if (vadOn) config.vad else null,
+                    memoryTool = toolsOn && config.memoryTool, temperature = if (tempOn) 1.0f else null,
                     controlTools = toolsOn && config.control && config.screenShare,
-                    emotion = emotionOn
+                    emotion = emotionOn,
+                    startHigh = startHigh
                 )
             )
         }

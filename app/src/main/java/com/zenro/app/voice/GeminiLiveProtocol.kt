@@ -57,6 +57,7 @@ object GeminiLiveProtocol {
         temperature: Float? = null,
         controlTools: Boolean = false,
         emotion: Boolean = false,
+        startHigh: Boolean = true,
     ): String {
         val fullModel = if (model.startsWith("models/")) model else "models/$model"
         val voice = JSONObject().put(
@@ -92,8 +93,10 @@ object GeminiLiveProtocol {
                     JSONObject()
                         .put("prefixPaddingMs", vad.prefixMs)
                         .put("silenceDurationMs", vad.silenceMs)
-                        // Catch the very start of soft / quiet speech.
-                        .put("startOfSpeechSensitivity", "START_SENSITIVITY_HIGH")
+                        .also {
+                            // Catch the very start of soft / quiet speech.
+                            if (startHigh) it.put("startOfSpeechSensitivity", "START_SENSITIVITY_HIGH")
+                        }
                 )
             )
         }
