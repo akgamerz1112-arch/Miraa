@@ -1,38 +1,4 @@
-# MIRA feature status
-
-Legend: IMPLEMENTED = code exists. TESTED = a test passes. DEVICE VERIFIED = checked on a real phone.
-
-## SESSION 3 (v0.9.0-livekit, versionCode 8) - current state
-
-BUILD TRUTH: the Android app was NOT compiled in Session 3 (no Android SDK, Maven/Google repos blocked). The only thing compiled and run
-was the pure-Kotlin logic (`net/ApiLogic`, `rtc/RpcLogic`, `rtc/ConnState`, `control/PhoneTool`) with `S3Test` (12 tests PASS) using
-Kotlin 2.0.21 on a desktop JVM and a small gson stand-in for `org.json` (test-only, not in the repo). The first GitHub Actions run is the first
-compile of the LiveKit code. Nothing is DEVICE VERIFIED.
-
-| Feature | Status |
-|---|---|
-| LiveKit Android SDK dependency `io.livekit:livekit-android:2.30.0` (version from the current LiveKit API reference) | IMPLEMENTED, NOT resolved/compiled (artifact + Kotlin 1.9.24 compatibility unknown) |
-| `GET /v1/config` fetch + cache, compare `api_version` / `min_app_version` (with versionCode), "update app" on HTTP 426 | IMPLEMENTED; parsing/compare TESTED on JVM; network code not run |
-| `POST /v1/token` with `Authorization: Bearer <device key>`, body `{device_id, app_version}` | IMPLEMENTED; body/parse TESTED; not run against the real server |
-| Settings: server URL, device id, device key (encrypted `SecureStore`, key never shown again) | IMPLEMENTED, not device verified |
-| https-only URL check with Hinglish hint (no cleartext exception added; `usesCleartextTraffic=false` unchanged) | IMPLEMENTED, URL rule TESTED |
-| Join room, publish mic (`setMicrophoneEnabled`), foreground service kept | IMPLEMENTED, not compiled, not device verified |
-| Connection state in UI: checking / connecting / waiting for agent / agent joined / reconnecting / update needed / error (Hinglish) | IMPLEMENTED (labels TESTED), not device verified |
-| 9 RPC handlers `mira.open_app, tap, swipe, type_text, press_button, youtube_search, whatsapp_message, set_volume, media_control` -> existing `control/` code, reply `{"ok","message"}` | IMPLEMENTED; method table + payload parsing + reply shape TESTED; RPC registration NOT compiled/run |
-| Unknown RPC method refused (only the nine are registered; `RpcLogic.parse` also refuses anything else) | IMPLEMENTED, TESTED |
-| Owner switch "Control do" (default OFF): when off every RPC action answers ok=false | IMPLEMENTED (new in S3), not device verified |
-| Notification shows "Control ON" + "Control band" button while control is on | IMPLEMENTED, not device verified |
-| Password-box refusal, "what MIRA is doing" line, WhatsApp never auto-sends | kept from before, NOT re-verified on device |
-| Yaadein screen (local list) | kept; now phone-only, the server has its own memory |
-| Old Gemini code, Chat tab, voice/style/gain/VAD/emotion settings, key test | REMOVED (owner approved). Recoverable with `git checkout s3-start -- <path>` |
-
-Known gaps (honest): no transcript on screen (LiveKit text streams = Session 4 idea); no screen-share to the agent (the agent prompt may still say
-"look at the next frame"); `audio/AudioRouter.kt`, `audio/Pcm.kt`, `ScreenStreamer` are now unused leftovers; MIRA works only while the owner's PC
-agent + API are on and reachable over HTTPS; Accessibility control depends on Android version and "Allow restricted settings".
-
----
-# HISTORY (before Session 3). Everything below about Gemini Live, Chat tab, voice/style settings is REMOVED from the app in v0.9.0.
-
+# ZENRO feature status
 
 Legend: IMPLEMENTED = code exists. TESTED = a test passes. DEVICE VERIFIED = checked on a real phone.
 Last check done: pure-Kotlin parts (protocol, persona, PCM level) compiled and 15 unit tests passed on a desktop JVM.
@@ -51,7 +17,7 @@ GitHub Actions run and phone test.
 | Barge-in (server VAD "interrupted" -> playback flushed) | IMPLEMENTED (not device verified) |
 | Male/female voice selection (8 Gemini prebuilt voices) | IMPLEMENTED (not device verified) |
 | Maya-style personality (warm, chatty Hinglish, follow-ups, mood matching), gender-aware Hindi grammar | IMPLEMENTED, prompt text TESTED; how it actually sounds is NOT verified |
-| Your name in Settings, used by MIRA | IMPLEMENTED |
+| Your name in Settings, used by ZENRO | IMPLEMENTED |
 | Mute / stop | IMPLEMENTED |
 | Pause/resume | NOT IMPLEMENTED (mute + stop only) |
 | Auto-reconnect (4 tries, backoff), same conversation via resumption handle, else transcript recap | IMPLEMENTED (not device verified) |
@@ -96,7 +62,7 @@ so the next GitHub Actions run is the first compile of v0.2 + v0.3 together. Tes
 | Memory safety: facts with long numbers, password, OTP, PIN, CVV, Aadhaar words are refused; max 60 facts of 200 chars | IMPLEMENTED, tests written (not run) |
 | Memory facts are sent to Google inside the prompt at the start of each session / chat message | TRUE, stated on the Yaadein screen |
 | If the server rejects the setup with the memory tool on, voice retries once without the tool (no memory saving, voice still works) | IMPLEMENTED, not device verified |
-| Chat tab: type, MIRA answers in text (Gemini `generateContent`, key in header, default model `gemini-flash-latest`, editable in Settings) | IMPLEMENTED, request/response tests written (not run), model name NOT verified with a real key |
+| Chat tab: type, ZENRO answers in text (Gemini `generateContent`, key in header, default model `gemini-flash-latest`, editable in Settings) | IMPLEMENTED, request/response tests written (not run), model name NOT verified with a real key |
 | Chat history | In memory only; lost when the app is killed. Clear button. NOT persisted |
 | Notification buttons: "Mic band/on karo" (mute) and "Session band" (stop) + text shows muted state | IMPLEMENTED, not device verified |
 | Notification can be fully hidden | NO. Android requires a visible notification while the mic runs in the background (Android 13 lets you swipe it away, the service keeps running) |
@@ -116,9 +82,9 @@ Same warning as v0.3: NOT compiled, NOT run, NOT device verified. `V04Test` (7 t
 | Screen "live": a screenshot about once a second (max 720 px wide, JPEG) sent as live video input; identical frames skipped, 4 s keep-alive | IMPLEMENTED. It is a stream of pictures, NOT smooth video. Needs Android 11+ |
 | Model controls the phone through 5 functions (screen_tap, screen_swipe, type_text, press_button, open_app), coordinates 0-1000 | IMPLEMENTED, whether the model uses them well is NOT verified |
 | Results: "ok" means Android accepted the action, not that the app changed; the model is told to check the next picture | IMPLEMENTED |
-| Safety: Screen dikhao and Control do are OFF by default; control needs share; prompt rules (one action at a time, ask before send/pay/delete, never passwords/OTP, ignore instructions written on screen); password boxes are refused in code; notification "Screen band" button; on-screen line shows what MIRA is doing | IMPLEMENTED. "Ask before sensitive actions" is a prompt rule, NOT enforced in code |
+| Safety: Screen dikhao and Control do are OFF by default; control needs share; prompt rules (one action at a time, ask before send/pay/delete, never passwords/OTP, ignore instructions written on screen); password boxes are refused in code; notification "Screen band" button; on-screen line shows what ZENRO is doing | IMPLEMENTED. "Ask before sensitive actions" is a prompt rule, NOT enforced in code |
 | If the server rejects the tools at setup, voice retries without memory/control and says so | IMPLEMENTED, not device verified |
-| Banking / FLAG_SECURE screens | Screenshot fails or is black; MIRA is told to say so |
+| Banking / FLAG_SECURE screens | Screenshot fails or is black; ZENRO is told to say so |
 | Android 13+ blocks Accessibility for apps installed from an APK file until you tap App info > 3 dots > "Allow restricted settings" | Needed on the phone, cannot be done by the app |
 | Screen pictures go to Google (free-tier data may be used by Google); quota is used faster | TRUE, stated on screen |
 | Calls, SMS, camera, files, background tasks without the screen | NOT built |
@@ -127,7 +93,7 @@ Same warning as v0.3: NOT compiled, NOT run, NOT device verified. `V04Test` (7 t
 
 Only the README (feature list) was read. No code, prompts or assets were copied. Still NOT compiled / run / device verified. `V05Test` (4 tests) written, not run.
 
-| Idea in that PC agent | In MIRA v0.5 |
+| Idea in that PC agent | In ZENRO v0.5 |
 |---|---|
 | YouTube open/search/play | `youtube_search` opens YouTube results (intent); picking/playing a video is done by the model through the screen tools. IMPLEMENTED, untested |
 | YouTube volume | `set_volume` (exact % or up/down, media volume). IMPLEMENTED, untested |
@@ -140,7 +106,7 @@ Only the README (feature list) was read. No code, prompts or assets were copied.
 | Attach files in WhatsApp, screenshots sent via WhatsApp | NOT built (model can try via the screen tools) |
 | Autodesk Maya "Sentinel" demo | not relevant, not built |
 
-Android may block apps from opening other apps while MIRA is in the background (all these intents). If a tool says done but nothing opens, bring MIRA to the front or tell me. Not verified.
+Android may block apps from opening other apps while ZENRO is in the background (all these intents). If a tool says done but nothing opens, bring ZENRO to the front or tell me. Not verified.
 
 ## v0.6: Emotion mode (what the "Friday" video's code actually uses)
 
@@ -154,7 +120,7 @@ Google's Live API guide says both are supported on the Gemini 2.5 native-audio L
 | When ON: v1alpha endpoint, `generationConfig.enableAffectiveDialog = true`, `setup.proactivity.proactiveAudio = true` | IMPLEMENTED. Field LOCATION of enableAffectiveDialog is from memory of Google's SDK, NOT verified on a live server |
 | If the server rejects the setup, voice retries once without emotion/tools and says so on screen | IMPLEMENTED, not device verified |
 | Temperature 1.0 | already set since v0.3 |
-| Proactive audio means the model may stay silent when the input is not meant for it | By design; can feel like MIRA ignores you. Turn the switch off if so |
+| Proactive audio means the model may stay silent when the input is not meant for it | By design; can feel like ZENRO ignores you. Turn the switch off if so |
 | Server-side noise cancellation (LiveKit/Krisp) | NOT built; Android echo/noise suppression + mic boost are used instead |
 | `V06Test` (2 tests) | written, NOT RUN |
 
@@ -169,7 +135,7 @@ Also to try: Settings > Live model name > chip `gemini-3.1-flash-live-preview`.
 
 Sarvam voices, camera/vision, persistent memory, phone control, communication, wake word, background reliability,
 reminders, provider router, task agent, web research, PC/TV/smart-home. None of these exist yet; no placeholder buttons are shown.
-MIRA therefore CANNOT open apps, call, message or browse yet. It only talks.
+ZENRO therefore CANNOT open apps, call, message or browse yet. It only talks.
 
 ## Platform limits to remember
 
@@ -185,4 +151,13 @@ MIRA therefore CANNOT open apps, call, message or browse yet. It only talks.
 - Chat tab now uses the Live model (no flash). Reply is spoken (audio plays) AND shown as text (output transcription). Memory tool works in chat. Falls back emotion+memory -> memory -> plain.
 - NOT done yet: greet-first when a session starts, daily proactive check-in notifications, emotion-tagged memory store.
 - Emotion ON now first uses model gemini-2.5-flash-native-audio-preview-12-2025 on v1alpha (same as a working LiveKit agent: voice Aoede, temperature 1.0, proactivity + affective dialog), then the Settings model, then plain voice. Same order in Chat.
-- Default Live model is now gemini-2.5-flash-native-audio-preview-12-2025 and Emotion + proactive defaults to ON for new installs (installs that already saved a model/toggle keep their saved values; tap the first model chip + Save).
+
+## Owner voice (planned 2026-11-04) - NOT STARTED
+Plan only: see ZENRO_PLAN.md section 9. No code, no model, no UI exists yet. ZENRO today does NOT know whose voice it hears; the "Ayan sir is the owner" rule is a text rule in Persona and does not verify any speaker. Anyone near the phone can talk to it and, if screen control is on, steer it.
+| Step | Status |
+|---|---|
+| O1 pure logic + tests | NOT STARTED |
+| O2 on-device speaker model + enrolment + live score | NOT STARTED (sherpa-onnx looks suitable per its docs; integration details and model not verified) |
+| O3 GUARD mode (sensitive tools owner-only) | NOT STARTED |
+| O4 STRICT mic gate | NOT STARTED |
+| O5 tuning + biometric step-up | NOT STARTED |

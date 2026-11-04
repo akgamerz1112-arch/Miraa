@@ -1,6 +1,6 @@
-# MIRA (v0.3: voice + chat + memory)
+# ZENRO (v0.3: voice + chat + memory)
 
-Native Android (Kotlin + Jetpack Compose). Talk to MIRA in real time (LiveKit room + MIRA agent running on your PC), in Hindi, Hinglish or English.
+Native Android (Kotlin + Jetpack Compose). Talk to ZENRO in real time using Gemini Live, in Hindi, Hinglish or English.
 New independent project. Right now it TALKS only; phone control, camera, memory etc. are later phases (see FEATURE_STATUS.md).
 
 ## Phone-only workflow (Termux, no laptop)
@@ -13,31 +13,31 @@ git config --global user.name "YOUR NAME"
 git config --global user.email "you@example.com"
 ```
 
-### Upload to your new GitHub repo `MIRA`
-1. Put MIRA.zip in your phone Downloads, then:
+### Upload to your new GitHub repo `ZENRO`
+1. Put ZENRO.zip in your phone Downloads, then:
    ```
-   cd ~ && rm -rf MIRA && unzip ~/storage/downloads/MIRA.zip && cd MIRA
+   cd ~ && rm -rf ZENRO && unzip ~/storage/downloads/ZENRO.zip && cd ZENRO
    ```
 2. Create a GitHub Personal Access Token: github.com > Settings > Developer settings > Personal access tokens >
-   Fine-grained > only repo MIRA > Repository permissions: Contents = Read and write, Workflows = Read and write.
+   Fine-grained > only repo ZENRO > Repository permissions: Contents = Read and write, Workflows = Read and write.
    Copy it. NEVER paste this token into any chat or into the code.
 3. Push:
    ```
    git init -b main
    git add .
-   git commit -m "MIRA phase 1 voice"
-   git remote add origin https://github.com/<your-username>/MIRA.git
+   git commit -m "ZENRO phase 1 voice"
+   git remote add origin https://github.com/<your-username>/ZENRO.git
    git push -u origin main
    ```
    When Git asks for Username type your GitHub username; for Password paste the token.
 4. GitHub repo > **Actions** > **Android Debug APK** > wait 5-10 min (first run is slower).
-5. Open the finished run > **Artifacts** > download **MIRA-debug-apk** > unzip > install the `.apk`
+5. Open the finished run > **Artifacts** > download **ZENRO-debug-apk** > unzip > install the `.apk`
    (allow "install unknown apps" for your browser/file manager).
-6. Open MIRA > **Settings** > paste Gemini API key (+ your name) > Save > tap the orb and talk.
+6. Open ZENRO > **Settings** > paste Gemini API key (+ your name) > Save > tap the orb and talk.
 
 ### Updating later
 ```
-cd ~/MIRA && git add . && git commit -m "update" && git push
+cd ~/ZENRO && git add . && git commit -m "update" && git push
 ```
 
 ## Gemini API key
@@ -48,7 +48,7 @@ Never put it in the code or on GitHub. Free quota is limited, not unlimited.
 ## Keep the same signing key (so updates install over the old app)
 
 Without this, every build uses a new debug key and you must uninstall before installing a new build.
-Optional: add GitHub repo secrets `MIRA_KEYSTORE_BASE64`, `MIRA_KEYSTORE_PASSWORD`, `MIRA_KEY_ALIAS`, `MIRA_KEY_PASSWORD`.
+Optional: add GitHub repo secrets `ZENRO_KEYSTORE_BASE64`, `ZENRO_KEYSTORE_PASSWORD`, `ZENRO_KEY_ALIAS`, `ZENRO_KEY_PASSWORD`.
 
 ## Troubleshooting
 
@@ -56,12 +56,6 @@ Optional: add GitHub repo secrets `MIRA_KEYSTORE_BASE64`, `MIRA_KEYSTORE_PASSWOR
 - Push rejected / auth failed: token needs Contents + Workflows read/write for this repo.
 - "Connection closed (1007/1008)": API key wrong, or model name not available. In Settings tap another model chip.
 - No sound: raise call volume; check that mic permission is allowed.
-- Stops in background: Settings > Battery > MIRA > Unrestricted.
+- Stops in background: Settings > Battery > ZENRO > Unrestricted.
 
 See FEATURE_STATUS.md for what is real and what is not built yet.
-
-
-## v0.9.0 (Session 3): LiveKit client
-The Gemini key/model settings are gone. MIRA now needs your PC server (`venomai-main`: agent + API, see its README) and these in Settings:
-server URL (**https**), device id and device key (`python device_auth.py add my-phone`). The older "Gemini API key" steps above are obsolete.
-Status labels: `FEATURE_STATUS.md`. Phone tests: `PHONE_TEST_CHECKLIST.md`.

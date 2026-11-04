@@ -5,38 +5,38 @@ plugins {
 
 // Optional fixed signing key. Supplied ONLY through environment variables
 // (GitHub Actions secrets). Nothing secret is stored in this repository.
-val ksPath: String? = System.getenv("MIRA_KEYSTORE_PATH")
+val ksPath: String? = System.getenv("ZENRO_KEYSTORE_PATH")
 
 android {
-    namespace = "com.mira.app"
+    namespace = "com.zenro.app"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.mira.app"
+        applicationId = "com.zenro.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "0.9.0-livekit"
+        versionCode = 7
+        versionName = "0.6.1-safe-setup"
     }
 
     signingConfigs {
         if (ksPath != null) {
-            create("mira") {
+            create("zenro") {
                 storeFile = file(ksPath)
-                storePassword = System.getenv("MIRA_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("MIRA_KEY_ALIAS")
-                keyPassword = System.getenv("MIRA_KEY_PASSWORD")
+                storePassword = System.getenv("ZENRO_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ZENRO_KEY_ALIAS")
+                keyPassword = System.getenv("ZENRO_KEY_PASSWORD")
             }
         }
     }
 
     buildTypes {
         debug {
-            if (ksPath != null) signingConfig = signingConfigs.getByName("mira")
+            if (ksPath != null) signingConfig = signingConfigs.getByName("zenro")
         }
         release {
             isMinifyEnabled = false
-            if (ksPath != null) signingConfig = signingConfigs.getByName("mira")
+            if (ksPath != null) signingConfig = signingConfigs.getByName("zenro")
         }
     }
 
@@ -67,8 +67,6 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    // LiveKit Android SDK (current per docs.livekit.io reference: 2.30.0). Not resolved/compiled in Session 3.
-    implementation("io.livekit:livekit-android:2.30.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
