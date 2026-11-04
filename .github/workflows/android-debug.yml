@@ -48,7 +48,22 @@ jobs:
           fi
 
       - name: Build debug APK
-        run: ./gradlew --no-daemon --stacktrace :app:assembleDebug
+        run: |
+          set -o pipefail
+          ./gradlew --no-daemon :app:assembleDebug 2>&1 | tee "$RUNNER_TEMP/build.log"
+
+      # If the build is red, put ONLY the real errors on the run's Summary page (Annotations + a short box).
+      - name: Show only the errors
+        if: failure()
+        run: |
+          {
+            echo '### Build errors (short)'
+            echo '```'
+            grep -E '^e: |What went wrong|Execution failed|AAPT|error:|Manifest merger' -A3 "$RUNNER_TEMP/build.log" | head -60
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^e: ' "$RUNNER_TEMP/build.log" | head -20 | while read -r l; do echo "::error::${l}"; done
+          grep -A4 'What went wrong' "$RUNNER_TEMP/build.log" | head -8 | while read -r l; do echo "::error::${l}"; done
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
