@@ -37,8 +37,8 @@ object GeminiLiveProtocol {
     /** Older model, kept as a fallback the user can pick in Settings. */
     const val LEGACY_MODEL = "gemini-3.1-flash-live-preview"
     const val EXTENDED_MODEL = "gemini-3.8-live-extended-thinking"
-    /** The model used in the "Friday" video; Google lists affective dialog + proactive audio only for 2.5 native-audio Live models. */
-    const val NATIVE_AUDIO_MODEL = "gemini-live-2.5-flash-native-audio"
+    /** The exact model a working Emotion + proactive agent uses (seen in a LiveKit "Friday" agent: affective dialog + proactivity, v1alpha). */
+    const val NATIVE_AUDIO_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025"
     const val INPUT_SAMPLE_RATE = 16000
     const val OUTPUT_SAMPLE_RATE = 24000
 

@@ -91,6 +91,11 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         everReady = false
         level = 0
         if (rememberedLevel > 0) { level = rememberedLevel; applyLevel(level) }
+        // Emotion first tries the exact model + API version a known-working agent uses.
+        if (emotionOn && config.model != GeminiLiveProtocol.NATIVE_AUDIO_MODEL) {
+            modelOverride = GeminiLiveProtocol.NATIVE_AUDIO_MODEL
+            emotionAlpha = true
+        }
         player.gain = config.gain
         applyRoute()
         router.listen(handler) { scheduleRerouteCheck() }
@@ -214,8 +219,10 @@ class GeminiLiveProvider(context: Context) : VoiceProvider {
         if (stopped || everReady || !emotionOn) return false
         emotionStage++
         if (emotionStage == 1) {
-            emotionAlpha = !emotionAlpha
-            cb.onAction("Emotion mode ke liye doosra API version try kar rahi hoon.")
+            // Second try: the model chosen in Settings, normal API version, still with emotion.
+            modelOverride = null
+            emotionAlpha = false
+            cb.onAction("Emotion mode ke liye doosra tareeka try kar rahi hoon.")
         } else {
             emotionOn = false
             emotionAlpha = false

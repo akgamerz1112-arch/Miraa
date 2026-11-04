@@ -81,7 +81,7 @@ class LiveChatClient {
                 override fun onOpen(webSocket: WebSocket, response: Response) {
                     webSocket.send(
                         GeminiLiveProtocol.buildSetup(
-                            model, voiceName, system, null, null,
+                            if (useEmotion) GeminiLiveProtocol.NATIVE_AUDIO_MODEL else model, voiceName, system, null, null,
                             memoryTool = useTools, temperature = null, controlTools = false,
                             emotion = useEmotion, startHigh = false,
                             compression = false, resumption = false
@@ -132,7 +132,7 @@ class LiveChatClient {
             }
             val old = socket
             val ws = client.newWebSocket(
-                Request.Builder().url(GeminiLiveProtocol.endpoint(apiKey, false)).build(), listener
+                Request.Builder().url(GeminiLiveProtocol.endpoint(apiKey, useEmotion)).build(), listener
             )
             socket = ws
             try { if (old !== ws) old?.close(1000, "retry") } catch (_: Exception) {}

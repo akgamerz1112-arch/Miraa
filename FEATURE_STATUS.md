@@ -147,6 +147,7 @@ ZENRO therefore CANNOT open apps, call, message or browse yet. It only talks.
 ## v0.7 (2026-11-04) - all CODE WRITTEN, NOT compiled, NOT device verified
 - Persona: creator rule (Ayan sir is the only owner; refuses other claims); big EMOTIONS section (range, per-emotion protocol, voice cues, emotional continuity); more moods.
 - Emotion mode: on failure before session start tries the other API version, then plain voice (no error screen).
-- Voice 1007 "Request contains an invalid argument": setup ladder now 6 steps (tools/emotion -> temperature/start sensitivity -> VAD -> compression+resumption -> model gemini-live-2.5-flash-native-audio -> gemini-3.1-flash-live-preview); working level remembered until app restart; screen shows which model worked.
+- Voice 1007 "Request contains an invalid argument": setup ladder now 6 steps (tools/emotion -> temperature/start sensitivity -> VAD -> compression+resumption -> model gemini-2.5-flash-native-audio-preview-12-2025 -> gemini-3.1-flash-live-preview); working level remembered until app restart; screen shows which model worked.
 - Chat tab now uses the Live model (no flash). Reply is spoken (audio plays) AND shown as text (output transcription). Memory tool works in chat. Falls back emotion+memory -> memory -> plain.
 - NOT done yet: greet-first when a session starts, daily proactive check-in notifications, emotion-tagged memory store.
+- Emotion ON now first uses model gemini-2.5-flash-native-audio-preview-12-2025 on v1alpha (same as a working LiveKit agent: voice Aoede, temperature 1.0, proactivity + affective dialog), then the Settings model, then plain voice. Same order in Chat.
