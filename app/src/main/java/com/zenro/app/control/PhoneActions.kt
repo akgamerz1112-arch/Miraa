@@ -6,7 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioManager
 import android.net.Uri
-import android.provider.ContactsContract
+import android.provider.ContactsContract.CommonDataKinds.Phone
 import android.view.KeyEvent
 import androidx.core.content.ContextCompat
 
@@ -73,10 +73,9 @@ object PhoneActions {
     }
 
     private fun lookupNumber(ctx: Context, name: String): String? {
-        val phone = ContactsContract.CommonDataKinds.Phone
         val c = ctx.contentResolver.query(
-            phone.CONTENT_URI, arrayOf(phone.NUMBER),
-            "${phone.DISPLAY_NAME} LIKE ?", arrayOf("%$name%"), null
+            Phone.CONTENT_URI, arrayOf(Phone.NUMBER),
+            Phone.DISPLAY_NAME + " LIKE ?", arrayOf("%$name%"), null
         ) ?: return null
         c.use { return if (it.moveToFirst()) it.getString(0) else null }
     }
