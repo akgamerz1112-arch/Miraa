@@ -21,8 +21,8 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:label="ZENRO"
-        android:theme="@style/Theme.Zenro"
+        android:label="MIRA"
+        android:theme="@style/Theme.Mira"
         android:usesCleartextTraffic="false">
 
         <activity
@@ -41,9 +41,9 @@
             android:exported="false" />
 
         <service
-            android:name=".control.ZenroAccessibilityService"
+            android:name=".control.MiraAccessibilityService"
             android:exported="false"
-            android:label="ZENRO"
+            android:label="MIRA"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

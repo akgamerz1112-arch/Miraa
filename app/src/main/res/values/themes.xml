@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Zenro" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.Mira" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">#05070A</item>
         <item name="android:statusBarColor">#05070A</item>
         <item name="android:navigationBarColor">#05070A</item>
